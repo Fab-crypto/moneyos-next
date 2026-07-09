@@ -11,7 +11,7 @@ export default function SplashPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.replace("/onboarding/welcome");
+      router.replace("/welcome");
     }, SPLASH_DURATION_MS);
 
     return () => clearTimeout(timer);
