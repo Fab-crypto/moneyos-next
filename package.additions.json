@@ -1,0 +1,9 @@
+{
+  "_comment": "Merge these into the \"dependencies\" object of your existing package.json, then run `npm install`. Do not replace your package.json with this file — it's a fragment, not a full manifest.",
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.4",
+    "class-variance-authority": "^0.7.0",
+    "lucide-react": "^0.462.0"
+  }
+}

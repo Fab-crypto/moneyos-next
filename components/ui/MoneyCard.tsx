@@ -1,0 +1,16 @@
+import type { ReactNode } from "react";
+
+interface MoneyCardProps {
+  children: ReactNode;
+  glow?: boolean;
+  padded?: boolean;
+  className?: string;
+}
+
+export function MoneyCard({ children, glow = false, padded = true, className = "" }: MoneyCardProps) {
+  return (
+    <div className={`card-premium ${glow ? "hero-glow" : ""} ${padded ? "p-6" : ""} ${className}`}>
+      {children}
+    </div>
+  );
+}

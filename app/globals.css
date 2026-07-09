@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #0b0b0d;
+  --foreground: #ffffff;
+  --muted: #1b1b20;
+  --muted-foreground: #9ca3af;
+  --border: #2b2b33;
+  --success: #3ddc84;
+  --gold: #d4af37;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Inter, sans-serif;
+}
+
+.bg-background {
+  background: var(--background);
+}
+
+.text-foreground {
+  color: var(--foreground);
+}
+
+.text-muted-foreground {
+  color: var(--muted-foreground);
+}
+
+.border-border {
+  border-color: var(--border);
+}
+
+.bg-muted {
+  background: var(--muted);
+}
+
+.card-premium {
+  background: #18181b;
+  border: 1px solid #2b2b33;
+  border-radius: 24px;
+}
+
+.glass {
+  background: rgba(15,15,18,.9);
+  backdrop-filter: blur(20px);
+}
+
+.hero-glow {
+  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+}
+
+.gold-text {
+  color: var(--gold);
+}
+
+.bg-success {
+  background: var(--success);
+}
+
+.text-success {
+  color: var(--success);
+}
+
+.font-heading {
+  font-family: Georgia, serif;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
