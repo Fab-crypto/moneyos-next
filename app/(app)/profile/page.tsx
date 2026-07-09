@@ -1,15 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import {
-  LayoutGrid,
-  Wallet,
-  Target,
-  Sparkles,
-  User,
   Moon,
   Bell,
   Shield,
@@ -20,27 +14,33 @@ import {
   Trash2,
   CheckCircle2,
   Building2,
+  Loader2,
 } from "lucide-react";
+import { MoneyCard } from "@/components/ui/MoneyCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { MoneyButton } from "@/components/ui/MoneyButton";
+import { BottomNav } from "@/components/layout/BottomNav";
+import { EASE, SHELL_WIDTH } from "@/lib/constants";
+import { supabase } from "@/lib/supabase";
 
-const EASE = [0.22, 1, 0.36, 1] as const;
-const SHELL_WIDTH = "max-w-[430px]";
-
-const NAV_TABS = [
-  { href: "/dashboard", icon: LayoutGrid, label: "Home" },
-  { href: "/accounts", icon: Wallet, label: "Accounts" },
-  { href: "/goals", icon: Target, label: "Goals" },
-  { href: "/mo", icon: Sparkles, label: "MO" },
-  { href: "/profile", icon: User, label: "Profile" },
-];
-
-// Identity, not account management — email lives inside Privacy & Security instead.
 const PROFILE = { name: "Fabian", memberSince: "February 2025" };
-
-// Same institutions shown on Accounts, for continuity across screens.
 const CONNECTED_BANKS = ["Chase", "American Express", "Fidelity", "SoFi"];
 
 export default function ProfilePage() {
   const reduceMotion = useReducedMotion();
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("[profile] sign out failed:", error);
+      setSigningOut(false);
+      return;
+    }
+    router.replace("/welcome");
+  }
 
   const pageContainer: Variants = {
     hidden: {},
@@ -81,10 +81,12 @@ export default function ProfilePage() {
           <motion.div variants={item} className="mt-3">
             <button
               type="button"
-              className="flex w-full items-center gap-3 rounded-2xl px-6 py-4 text-danger transition-colors [@media(hover:hover)]:hover:bg-destructive/10"
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="flex w-full items-center gap-3 rounded-2xl px-6 py-4 text-danger transition-colors disabled:opacity-50 [@media(hover:hover)]:hover:bg-destructive/10"
             >
-              <LogOut size={16} />
-              <span className="text-sm font-medium">Sign Out</span>
+              {signingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}
+              <span className="text-sm font-medium">{signingOut ? "Signing out..." : "Sign Out"}</span>
             </button>
           </motion.div>
 
@@ -99,10 +101,9 @@ export default function ProfilePage() {
   );
 }
 
-/** Identity, kept quiet — a name and how long they've been here, nothing to manage. */
 function ProfileHeader() {
   return (
-    <div className="card-premium p-6">
+    <MoneyCard>
       <div className="flex items-center gap-4">
         <div className="gold-bg flex h-14 w-14 shrink-0 items-center justify-center rounded-full">
           <span className="gold-text font-heading text-lg font-semibold">
@@ -115,17 +116,14 @@ function ProfileHeader() {
           <p className="mt-0.5 text-xs text-muted-foreground">Since {PROFILE.memberSince}</p>
         </div>
       </div>
-    </div>
+    </MoneyCard>
   );
 }
 
-/** First-class connections list — a Plaid Link result will populate this later. */
 function ConnectedBanksCard() {
   return (
-    <div className="card-premium p-6">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        Connected Banks
-      </span>
+    <MoneyCard>
+      <SectionHeader>Connected Banks</SectionHeader>
       <div className="mt-4 space-y-3.5">
         {CONNECTED_BANKS.map((bank) => (
           <div key={bank} className="flex items-center gap-3">
@@ -137,23 +135,22 @@ function ConnectedBanksCard() {
           </div>
         ))}
       </div>
-    </div>
+    </MoneyCard>
   );
 }
 
-/** One flat settings list — appearance/notifications as toggles, the rest as navigation rows. */
 function SettingsListCard() {
   const [darkMode, setDarkMode] = useState(true);
   const [notifications, setNotifications] = useState(true);
 
   return (
-    <div className="card-premium divide-y divide-border/50">
+    <MoneyCard padded={false} className="divide-y divide-border/50">
       <ToggleRow icon={Moon} label="Appearance" checked={darkMode} onChange={setDarkMode} />
       <ToggleRow icon={Bell} label="Notifications" checked={notifications} onChange={setNotifications} />
       <NavRow icon={Shield} label="Privacy & Security" />
       <NavRow icon={CreditCard} label="Subscription" />
       <NavRow icon={HelpCircle} label="Support" />
-    </div>
+    </MoneyCard>
   );
 }
 
@@ -207,21 +204,20 @@ function NavRow({ icon: Icon, label }: { icon: typeof Shield; label: string }) {
   );
 }
 
-/** Delete Account — inline confirm step, no modal dependency. */
+/** Delete Account — inline confirm step, no modal dependency.
+ *  Note: the Cancel/Delete pair stays custom (not MoneyButton) since it's
+ *  a half-width filled-neutral + filled-destructive pair, a shape none
+ *  of the three MoneyButton variants currently cover. */
 function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <div className="card-premium p-6">
+    <MoneyCard>
       {!confirming ? (
-        <button
-          type="button"
-          onClick={() => setConfirming(true)}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-destructive text-[14px] font-medium text-destructive-foreground transition-opacity hover:opacity-90"
-        >
+        <MoneyButton variant="destructive" size="md" onClick={() => setConfirming(true)}>
           <Trash2 size={15} />
           Delete Account
-        </button>
+        </MoneyButton>
       ) : (
         <div>
           <p className="text-sm font-medium text-foreground">Delete your account?</p>
@@ -245,38 +241,6 @@ function DeleteAccountCard() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function BottomNav() {
-  const pathname = usePathname();
-
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 flex justify-center px-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <div
-        className={`glass flex w-full ${SHELL_WIDTH} items-center justify-around rounded-full border border-border/60 px-3 py-3 shadow-2xl`}
-      >
-        {NAV_TABS.map(({ href, icon: Icon, label }) => {
-          const active = pathname === href;
-          return (
-            <Link key={href} href={href} className="relative flex flex-col items-center gap-1 px-2">
-              <motion.div
-                animate={{ scale: active ? 1.08 : 1 }}
-                transition={{ duration: 0.2, ease: EASE }}
-                className={`flex h-9 w-9 items-center justify-center rounded-full ${
-                  active ? "bg-foreground/10 text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                <Icon size={20} strokeWidth={active ? 2.3 : 1.7} />
-              </motion.div>
-              <span className={`text-[10px] ${active ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
-                {label}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    </MoneyCard>
   );
 }
