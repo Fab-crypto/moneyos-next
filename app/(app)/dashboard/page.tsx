@@ -21,7 +21,6 @@ const UPCOMING_BILLS = [
 const EMERGENCY_FUND_PCT = 71;
 
 export default function DashboardPage() {
-  throw new Error("Sentry production test");
   const reduceMotion = useReducedMotion();
   const confidence = useFinancialConfidence();
   const today = formatWeekdayDate();
