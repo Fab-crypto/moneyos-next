@@ -109,7 +109,8 @@ export default function AccountsPage() {
       const rawAccounts = accountsResult.data ?? [];
       const rawInstitutions = institutionsResult.data ?? [];
 
-      const signedBalance = (type: string, balance: number) => (type === "credit" ? -balance : balance);
+      const DEBT_TYPES = new Set(["credit", "loan"]);
+      const signedBalance = (type: string, balance: number) => (DEBT_TYPES.has(type) ? -balance : balance);
 
       const grouped: Institution[] = rawInstitutions
         .map((inst) => {
