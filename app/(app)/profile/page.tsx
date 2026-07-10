@@ -13,7 +13,7 @@ export default async function ProfilePage() {
   }
 
   const [profileResult, institutionsResult] = await Promise.all([
-    supabase.from("profiles").select("full_name, created_at, notifications_enabled").eq("id", user.id).single(),
+    supabase.from("profiles").select("full_name, created_at, notifications_enabled").eq("id", user.id).maybeSingle(),
     supabase.from("institutions").select("id, name").eq("user_id", user.id).order("name"),
   ]);
 
