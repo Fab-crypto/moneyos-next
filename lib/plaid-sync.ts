@@ -16,12 +16,6 @@ export interface SyncResult {
   removed: number;
 }
 
-// Plaid's transaction amount sign convention: positive = money leaving
-// the account (a purchase/expense), negative = money coming in (a
-// deposit/income). This is the opposite of MoneyOS's storage convention
-// (amount is always positive; sign is carried by `type` instead), so it
-// is translated here at the sync boundary — nowhere else in the app
-// needs to know Plaid's convention exists.
 function resolveType(plaidAmount: number, pfcPrimary: string | null | undefined): "income" | "expense" | "transfer" {
   if (pfcPrimary?.startsWith("TRANSFER")) return "transfer";
   return plaidAmount < 0 ? "income" : "expense";
@@ -32,16 +26,7 @@ function normalizeCategory(pfcPrimary: string | null | undefined): string {
   return pfcPrimary.toLowerCase().replace(/_/g, " ");
 }
 
-/**
- * Syncs one Plaid Item's transactions (added/modified/removed) into the
- * `transactions` table, advances its cursor, and logs the run to
- * `plaid_sync_logs`. Used by both the standalone /transactions-sync
- * route (syncs every item for the caller) and exchange-public-token
- * (syncs just the item that was just connected), so this logic exists
- * exactly once.
- */
 export async function syncPlaidItemTransactions(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: SupabaseClient<any, "public", any>,
   userId: string,
   item: PlaidItemRow
@@ -62,9 +47,7 @@ export async function syncPlaidItemTransactions(
 
     let cursor: string | undefined = item.cursor ?? undefined;
     let hasMore = true;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const added: any[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const modified: any[] = [];
     const removed: { transaction_id: string }[] = [];
 
@@ -80,7 +63,7 @@ export async function syncPlaidItemTransactions(
     const upsertRows = [...added, ...modified]
       .map((t) => {
         const accountId = accountIdByPlaidId.get(t.account_id);
-        if (!accountId) return null; // transaction belongs to an account we haven't synced
+        if (!accountId) return null;
 
         const pfcPrimary = t.personal_finance_category?.primary ?? null;
         const pfcDetailed = t.personal_finance_category?.detailed ?? null;
@@ -119,6 +102,40 @@ export async function syncPlaidItemTransactions(
         .update({ is_removed: true })
         .in("plaid_transaction_id", removedIds);
       if (removeError) throw removeError;
+    }
+
+    try {
+      const balancesResponse = await plaidClient.accountsGet({ access_token: accessToken });
+
+      const balanceUpdates = balancesResponse.data.accounts
+        .map((a) => {
+          const accountId = accountIdByPlaidId.get(a.account_id);
+          if (!accountId) return null;
+
+          return {
+            id: accountId,
+            current_balance: a.balances.current ?? 0,
+            available_balance: a.balances.available,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
+
+      for (const update of balanceUpdates) {
+        const { error: balanceError } = await admin
+          .from("accounts")
+          .update({
+            current_balance: update.current_balance,
+            available_balance: update.available_balance,
+          })
+          .eq("id", update.id);
+        if (balanceError) {
+          console.error(`[plaid-sync] balance update failed for account=${update.id}:`, balanceError);
+        }
+      }
+
+      console.log(`[plaid-sync] item=${item.plaid_item_id} refreshed ${balanceUpdates.length} account balance(s)`);
+    } catch (balanceErr) {
+      console.error(`[plaid-sync] item=${item.plaid_item_id} balance refresh failed (non-fatal):`, balanceErr);
     }
 
     const { error: cursorError } = await admin

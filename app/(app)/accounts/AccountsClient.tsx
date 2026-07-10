@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion, type Variants } from "framer-motion";
-import { Loader2, Wallet, ChevronDown, Plus, Trash2 } from "lucide-react";
+import { Loader2, Wallet, ChevronDown, Plus, Trash2, PiggyBank, TrendingUp, CreditCard } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoodBadge } from "@/components/ui/MoodBadge";
@@ -39,6 +39,10 @@ interface AccountsClientProps {
   totalBalance: number;
   mostRecentSync: string | null;
   upcomingBills: UpcomingBill[];
+  cash: number;
+  savings: number;
+  investments: number;
+  debt: number;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -60,7 +64,16 @@ function formatRelativeSync(iso: string | null): string {
   return `Synced ${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
 }
 
-export function AccountsClient({ institutions, totalBalance, mostRecentSync, upcomingBills }: AccountsClientProps) {
+export function AccountsClient({
+  institutions,
+  totalBalance,
+  mostRecentSync,
+  upcomingBills,
+  cash,
+  savings,
+  investments,
+  debt,
+}: AccountsClientProps) {
   const reduceMotion = useReducedMotion();
   const router = useRouter();
 
@@ -109,6 +122,10 @@ export function AccountsClient({ institutions, totalBalance, mostRecentSync, upc
                 <AccountSummaryCard
                   total={totalBalance}
                   accountCount={institutions.reduce((s, i) => s + i.accounts.length, 0)}
+                  cash={cash}
+                  savings={savings}
+                  investments={investments}
+                  debt={debt}
                 />
               </motion.div>
 
@@ -167,7 +184,21 @@ function ConnectAnotherBankRow({ onConnected }: { onConnected: () => void }) {
   );
 }
 
-function AccountSummaryCard({ total, accountCount }: { total: number; accountCount: number }) {
+function AccountSummaryCard({
+  total,
+  accountCount,
+  cash,
+  savings,
+  investments,
+  debt,
+}: {
+  total: number;
+  accountCount: number;
+  cash: number;
+  savings: number;
+  investments: number;
+  debt: number;
+}) {
   const isNegative = total < 0;
   return (
     <MoneyCard glow className="mt-8 p-7">
@@ -182,7 +213,40 @@ function AccountSummaryCard({ total, accountCount }: { total: number; accountCou
       <p className="mt-4 text-[14px] text-muted-foreground">
         Across {accountCount} connected account{accountCount === 1 ? "" : "s"}
       </p>
+
+      <div className="mt-8 grid grid-cols-2 gap-y-6 gap-x-4 border-t border-border/50 pt-6">
+        <SummaryStat icon={Wallet} label="Available Cash" amount={cash} />
+        <SummaryStat icon={PiggyBank} label="Savings" amount={savings} />
+        <SummaryStat icon={TrendingUp} label="Investments" amount={investments} />
+        <SummaryStat icon={CreditCard} label="Debt" amount={debt} isDebt />
+      </div>
     </MoneyCard>
+  );
+}
+
+function SummaryStat({
+  icon: Icon,
+  label,
+  amount,
+  isDebt = false,
+}: {
+  icon: typeof Wallet;
+  label: string;
+  amount: number;
+  isDebt?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+        <Icon size={14} className="text-foreground" />
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className={`text-sm font-semibold ${isDebt && amount > 0 ? "text-danger" : "text-foreground"}`}>
+          ${formatMoney(amount, { decimals: 0, absolute: true })}
+        </p>
+      </div>
+    </div>
   );
 }
 

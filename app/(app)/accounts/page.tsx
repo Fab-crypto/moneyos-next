@@ -28,7 +28,7 @@ export default async function AccountsPage() {
     supabase.from("institutions").select("id, name, status, last_synced_at"),
     supabase
       .from("accounts")
-      .select("id, name, current_balance, type, institution_id")
+      .select("id, name, current_balance, type, subtype, institution_id")
       .eq("is_active", true),
     supabase
       .from("recurring_transactions")
@@ -43,6 +43,23 @@ export default async function AccountsPage() {
 
   const DEBT_TYPES = new Set(["credit", "loan"]);
   const signedBalance = (type: string, balance: number) => (DEBT_TYPES.has(type) ? -balance : balance);
+
+  let cash = 0;
+  let savings = 0;
+  let investments = 0;
+  let debt = 0;
+  for (const a of rawAccounts) {
+    const balance = a.current_balance ?? 0;
+    if (a.type === "depository" && a.subtype === "checking") {
+      cash += balance;
+    } else if (a.type === "depository") {
+      savings += balance;
+    } else if (a.type === "investment") {
+      investments += balance;
+    } else if (DEBT_TYPES.has(a.type)) {
+      debt += balance;
+    }
+  }
 
   const institutions = rawInstitutions
     .map((inst) => {
@@ -89,6 +106,10 @@ export default async function AccountsPage() {
       totalBalance={totalBalance}
       mostRecentSync={mostRecentSync}
       upcomingBills={upcomingBills}
+      cash={cash}
+      savings={savings}
+      investments={investments}
+      debt={debt}
     />
   );
 }
