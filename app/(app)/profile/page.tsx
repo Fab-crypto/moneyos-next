@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import {
@@ -142,11 +142,67 @@ function ConnectedBanksCard() {
 function SettingsListCard() {
   const [darkMode, setDarkMode] = useState(true);
   const [notifications, setNotifications] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadNotificationSetting() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !isMounted) return;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("notifications_enabled")
+        .eq("id", user.id)
+        .single();
+
+      if (!isMounted) return;
+      if (error) {
+        console.error("[profile] failed to load notification setting:", error);
+      } else if (data) {
+        setNotifications(data.notifications_enabled ?? true);
+      }
+      setLoaded(true);
+    }
+
+    loadNotificationSetting();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleNotificationsChange(next: boolean) {
+    setNotifications(next); // optimistic — update the UI immediately
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ notifications_enabled: next })
+      .eq("id", user.id);
+
+    if (error) {
+      console.error("[profile] failed to save notification setting:", error);
+      setNotifications(!next); // revert on failure — don't show a saved
+      // state that isn't actually saved
+    }
+  }
 
   return (
     <MoneyCard padded={false} className="divide-y divide-border/50">
       <ToggleRow icon={Moon} label="Appearance" checked={darkMode} onChange={setDarkMode} />
-      <ToggleRow icon={Bell} label="Notifications" checked={notifications} onChange={setNotifications} />
+      <ToggleRow
+        icon={Bell}
+        label="Notifications"
+        checked={notifications}
+        onChange={handleNotificationsChange}
+        disabled={!loaded}
+      />
       <NavRow icon={Shield} label="Privacy & Security" />
       <NavRow icon={CreditCard} label="Subscription" />
       <NavRow icon={HelpCircle} label="Support" />
@@ -159,11 +215,13 @@ function ToggleRow({
   label,
   checked,
   onChange,
+  disabled = false,
 }: {
   icon: typeof Moon;
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between px-6 py-4">
@@ -176,8 +234,11 @@ function ToggleRow({
         role="switch"
         aria-checked={checked}
         aria-label={label}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative h-6 w-11 rounded-full transition-colors ${checked ? "bg-gold" : "bg-muted"}`}
+        className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${
+          checked ? "bg-gold" : "bg-muted"
+        }`}
       >
         <span
           className={`absolute top-0.5 h-5 w-5 rounded-full bg-background transition-transform ${
@@ -204,10 +265,6 @@ function NavRow({ icon: Icon, label }: { icon: typeof Shield; label: string }) {
   );
 }
 
-/** Delete Account — inline confirm step, no modal dependency.
- *  Note: the Cancel/Delete pair stays custom (not MoneyButton) since it's
- *  a half-width filled-neutral + filled-destructive pair, a shape none
- *  of the three MoneyButton variants currently cover. */
 function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
 
