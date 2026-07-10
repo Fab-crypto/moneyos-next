@@ -10,6 +10,25 @@ interface PlaidWebhookBody {
   error?: { error_code?: string } | null;
 }
 
+// Plaid sends several distinct TRANSACTIONS codes across an Item's
+// lifecycle — the first pull after connecting (INITIAL_UPDATE), the
+// slower backfill of older history (HISTORICAL_UPDATE), routine
+// day-to-day updates (DEFAULT_UPDATE), and the /transactions/sync-based
+// signal (SYNC_UPDATES_AVAILABLE). All four mean the same thing from
+// our side: new data is available, go pull it — syncPlaidItemTransactions
+// is cursor-based, so calling it for any of these is always correct and
+// never double-processes the same transactions twice.
+const SYNC_TRIGGER_CODES = new Set([
+  "INITIAL_UPDATE",
+  "HISTORICAL_UPDATE",
+  "DEFAULT_UPDATE",
+  "SYNC_UPDATES_AVAILABLE",
+]);
+
+function shouldTriggerSync(webhookType: string, webhookCode: string): boolean {
+  return webhookType === "TRANSACTIONS" && SYNC_TRIGGER_CODES.has(webhookCode);
+}
+
 export async function POST(request: Request) {
   // Read the raw text first — verification needs the exact bytes Plaid
   // signed, before any JSON parsing could subtly alter formatting.
@@ -61,7 +80,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (body.webhook_type === "TRANSACTIONS" && body.webhook_code === "SYNC_UPDATES_AVAILABLE") {
+    if (shouldTriggerSync(body.webhook_type, body.webhook_code)) {
       await syncPlaidItemTransactions(admin, item.user_id, item);
       await admin
         .from("institutions")
