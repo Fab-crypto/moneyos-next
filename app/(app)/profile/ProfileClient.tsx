@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import {
@@ -157,6 +157,19 @@ function SettingsListCard({ initialNotificationsEnabled }: { initialNotification
   const [notifications, setNotifications] = useState(initialNotificationsEnabled);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("moneyos_theme");
+    const isLight = saved === "light";
+    setDarkMode(!isLight);
+    document.documentElement.classList.toggle("light", isLight);
+  }, []);
+
+  function handleDarkModeChange(nextDarkMode: boolean) {
+    setDarkMode(nextDarkMode);
+    document.documentElement.classList.toggle("light", !nextDarkMode);
+    localStorage.setItem("moneyos_theme", nextDarkMode ? "dark" : "light");
+  }
+
   async function handleNotificationsChange(next: boolean) {
     setNotifications(next);
     setSaving(true);
@@ -180,7 +193,7 @@ function SettingsListCard({ initialNotificationsEnabled }: { initialNotification
 
   return (
     <MoneyCard padded={false} className="divide-y divide-border/50">
-      <ToggleRow icon={Moon} label="Appearance" checked={darkMode} onChange={setDarkMode} />
+      <ToggleRow icon={Moon} label="Appearance" checked={darkMode} onChange={handleDarkModeChange} />
       <ToggleRow
         icon={Bell}
         label="Notifications"
