@@ -12,9 +12,10 @@ export default async function ProfilePage() {
     redirect("/welcome");
   }
 
-  const [profileResult, institutionsResult] = await Promise.all([
+  const [profileResult, institutionsResult, subscriptionResult] = await Promise.all([
     supabase.from("profiles").select("full_name, created_at, notifications_enabled").eq("id", user.id).maybeSingle(),
     supabase.from("institutions").select("id, name").eq("user_id", user.id).order("name"),
+    supabase.from("subscriptions").select("status, current_period_end").eq("user_id", user.id).maybeSingle(),
   ]);
 
   if (profileResult.error) {
@@ -22,6 +23,9 @@ export default async function ProfilePage() {
   }
   if (institutionsResult.error) {
     console.error("[profile] failed to load institutions:", institutionsResult.error);
+  }
+  if (subscriptionResult.error) {
+    console.error("[profile] failed to load subscription:", subscriptionResult.error);
   }
 
   const name = profileResult.data?.full_name?.trim() || user.email?.split("@")[0] || "there";
@@ -32,12 +36,15 @@ export default async function ProfilePage() {
 
   const connectedBanks = (institutionsResult.data ?? []).map((i) => ({ id: i.id, name: i.name }));
 
+  const isSubscribed = subscriptionResult.data?.status === "active" || subscriptionResult.data?.status === "trialing";
+
   return (
     <ProfileClient
       name={name}
       memberSince={memberSince}
       connectedBanks={connectedBanks}
       initialNotificationsEnabled={profileResult.data?.notifications_enabled ?? true}
+      isSubscribed={isSubscribed}
     />
   );
 }

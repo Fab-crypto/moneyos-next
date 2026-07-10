@@ -33,9 +33,16 @@ interface ProfileClientProps {
   memberSince: string | null;
   connectedBanks: ConnectedBank[];
   initialNotificationsEnabled: boolean;
+  isSubscribed: boolean;
 }
 
-export function ProfileClient({ name, memberSince, connectedBanks, initialNotificationsEnabled }: ProfileClientProps) {
+export function ProfileClient({
+  name,
+  memberSince,
+  connectedBanks,
+  initialNotificationsEnabled,
+  isSubscribed,
+}: ProfileClientProps) {
   const reduceMotion = useReducedMotion();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
@@ -84,7 +91,7 @@ export function ProfileClient({ name, memberSince, connectedBanks, initialNotifi
           </motion.div>
 
           <motion.div variants={item} className="mt-5">
-            <SettingsListCard initialNotificationsEnabled={initialNotificationsEnabled} />
+            <SettingsListCard initialNotificationsEnabled={initialNotificationsEnabled} isSubscribed={isSubscribed} />
           </motion.div>
 
           <motion.div variants={item} className="mt-3">
@@ -152,13 +159,17 @@ function ConnectedBanksCard({ banks }: { banks: ConnectedBank[] }) {
   );
 }
 
-function SettingsListCard({ initialNotificationsEnabled }: { initialNotificationsEnabled: boolean }) {
+function SettingsListCard({
+  initialNotificationsEnabled,
+  isSubscribed,
+}: {
+  initialNotificationsEnabled: boolean;
+  isSubscribed: boolean;
+}) {
   const [darkMode, setDarkMode] = useState(true);
   const [notifications, setNotifications] = useState(initialNotificationsEnabled);
   const [saving, setSaving] = useState(false);
 
-  // Read the saved theme choice once, on mount — localStorage only
-  // exists in the browser, so this can't run during server rendering.
   useEffect(() => {
     const saved = localStorage.getItem("moneyos_theme");
     const isLight = saved === "light";
@@ -173,7 +184,7 @@ function SettingsListCard({ initialNotificationsEnabled }: { initialNotification
   }
 
   async function handleNotificationsChange(next: boolean) {
-    setNotifications(next); // optimistic
+    setNotifications(next);
     setSaving(true);
     const {
       data: { user },
@@ -188,7 +199,7 @@ function SettingsListCard({ initialNotificationsEnabled }: { initialNotification
 
     if (error) {
       console.error("[profile] failed to save notification setting:", error);
-      setNotifications(!next); // revert on failure
+      setNotifications(!next);
     }
     setSaving(false);
   }
@@ -204,7 +215,7 @@ function SettingsListCard({ initialNotificationsEnabled }: { initialNotification
         disabled={saving}
       />
       <NavRow icon={Shield} label="Privacy & Security" />
-      <SubscriptionRow />
+      <SubscriptionRow isSubscribed={isSubscribed} />
       <NavRow icon={HelpCircle} label="Support" />
     </MoneyCard>
   );
@@ -265,11 +276,7 @@ function NavRow({ icon: Icon, label }: { icon: typeof Shield; label: string }) {
   );
 }
 
-/** The one real row in this list right now — starts a real Stripe
- *  Checkout session. Status display (Active/Inactive) comes in Stage B,
- *  once the webhook exists to actually know the real subscription
- *  state; for now this always offers to start checkout. */
-function SubscriptionRow() {
+function SubscriptionRow({ isSubscribed }: { isSubscribed: boolean }) {
   const [loading, setLoading] = useState(false);
 
   async function handleUpgrade() {
@@ -289,6 +296,21 @@ function SubscriptionRow() {
       console.error("[profile] checkout request failed:", err);
       setLoading(false);
     }
+  }
+
+  if (isSubscribed) {
+    return (
+      <div className="flex w-full items-center justify-between px-6 py-4">
+        <div className="flex items-center gap-3">
+          <CreditCard size={16} className="text-muted-foreground" />
+          <span className="text-sm text-foreground">Subscription</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <CheckCircle2 size={14} className="text-success" />
+          <span className="text-xs font-medium text-success">Active</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -311,8 +333,6 @@ function SubscriptionRow() {
   );
 }
 
-/** Delete Account — inline confirm step, no modal dependency. Not wired
- *  to a real delete yet — out of scope for this pass, unchanged. */
 function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
 
