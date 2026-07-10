@@ -16,6 +16,7 @@ export async function POST() {
 
   try {
     const response = await plaidClient.linkTokenCreate({
+      webhook: process.env.PLAID_WEBHOOK_URL,
       user: { client_user_id: user.id },
       client_name: "MoneyOS",
       products: [Products.Transactions],
