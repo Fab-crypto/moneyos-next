@@ -157,6 +157,8 @@ function SettingsListCard({ initialNotificationsEnabled }: { initialNotification
   const [notifications, setNotifications] = useState(initialNotificationsEnabled);
   const [saving, setSaving] = useState(false);
 
+  // Read the saved theme choice once, on mount — localStorage only
+  // exists in the browser, so this can't run during server rendering.
   useEffect(() => {
     const saved = localStorage.getItem("moneyos_theme");
     const isLight = saved === "light";
@@ -171,7 +173,7 @@ function SettingsListCard({ initialNotificationsEnabled }: { initialNotification
   }
 
   async function handleNotificationsChange(next: boolean) {
-    setNotifications(next);
+    setNotifications(next); // optimistic
     setSaving(true);
     const {
       data: { user },
@@ -186,7 +188,7 @@ function SettingsListCard({ initialNotificationsEnabled }: { initialNotification
 
     if (error) {
       console.error("[profile] failed to save notification setting:", error);
-      setNotifications(!next);
+      setNotifications(!next); // revert on failure
     }
     setSaving(false);
   }
@@ -202,7 +204,7 @@ function SettingsListCard({ initialNotificationsEnabled }: { initialNotification
         disabled={saving}
       />
       <NavRow icon={Shield} label="Privacy & Security" />
-      <NavRow icon={CreditCard} label="Subscription" />
+      <SubscriptionRow />
       <NavRow icon={HelpCircle} label="Support" />
     </MoneyCard>
   );
@@ -263,6 +265,54 @@ function NavRow({ icon: Icon, label }: { icon: typeof Shield; label: string }) {
   );
 }
 
+/** The one real row in this list right now — starts a real Stripe
+ *  Checkout session. Status display (Active/Inactive) comes in Stage B,
+ *  once the webhook exists to actually know the real subscription
+ *  state; for now this always offers to start checkout. */
+function SubscriptionRow() {
+  const [loading, setLoading] = useState(false);
+
+  async function handleUpgrade() {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/stripe/create-checkout-session", { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok || !data.url) {
+        console.error("[profile] checkout session failed:", data.error);
+        setLoading(false);
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch (err) {
+      console.error("[profile] checkout request failed:", err);
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleUpgrade}
+      disabled={loading}
+      className="flex w-full items-center justify-between px-6 py-4 transition-colors disabled:opacity-50 [@media(hover:hover)]:hover:bg-muted/50"
+    >
+      <div className="flex items-center gap-3">
+        {loading ? (
+          <Loader2 size={16} className="animate-spin text-muted-foreground" />
+        ) : (
+          <CreditCard size={16} className="text-muted-foreground" />
+        )}
+        <span className="text-sm text-foreground">{loading ? "Starting checkout..." : "Subscription"}</span>
+      </div>
+      <ChevronRight size={14} className="text-muted-foreground" />
+    </button>
+  );
+}
+
+/** Delete Account — inline confirm step, no modal dependency. Not wired
+ *  to a real delete yet — out of scope for this pass, unchanged. */
 function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
 
