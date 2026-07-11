@@ -298,18 +298,49 @@ function SubscriptionRow({ isSubscribed }: { isSubscribed: boolean }) {
     }
   }
 
+  async function handleManage() {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/stripe/create-portal-session", { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok || !data.url) {
+        console.error("[profile] portal session failed:", data.error);
+        setLoading(false);
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch (err) {
+      console.error("[profile] portal request failed:", err);
+      setLoading(false);
+    }
+  }
+
   if (isSubscribed) {
     return (
-      <div className="flex w-full items-center justify-between px-6 py-4">
+      <button
+        type="button"
+        onClick={handleManage}
+        disabled={loading}
+        className="flex w-full items-center justify-between px-6 py-4 transition-colors disabled:opacity-50 [@media(hover:hover)]:hover:bg-muted/50"
+      >
         <div className="flex items-center gap-3">
-          <CreditCard size={16} className="text-muted-foreground" />
-          <span className="text-sm text-foreground">Subscription</span>
+          {loading ? (
+            <Loader2 size={16} className="animate-spin text-muted-foreground" />
+          ) : (
+            <CreditCard size={16} className="text-muted-foreground" />
+          )}
+          <span className="text-sm text-foreground">{loading ? "Opening..." : "Subscription"}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <CheckCircle2 size={14} className="text-success" />
-          <span className="text-xs font-medium text-success">Active</span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 size={14} className="text-success" />
+            <span className="text-xs font-medium text-success">Active</span>
+          </div>
+          <ChevronRight size={14} className="text-muted-foreground" />
         </div>
-      </div>
+      </button>
     );
   }
 
