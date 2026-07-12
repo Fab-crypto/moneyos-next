@@ -60,13 +60,13 @@ export default function WelcomePage() {
           className="flex flex-col gap-3 pb-[max(2.5rem,env(safe-area-inset-bottom))]"
         >
           <Link
-            href="/create-account"
+            href="/auth/signup"
             className="flex h-14 items-center justify-center rounded-xl bg-foreground text-[15px] font-medium text-background transition-opacity hover:opacity-90 active:opacity-80"
           >
             Get Started
           </Link>
           <Link
-            href="/sign-in"
+            href="/auth/login"
             className="flex h-14 items-center justify-center rounded-xl text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             I already have an account
