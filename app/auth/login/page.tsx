@@ -5,7 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("odukfabian@gmail.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -29,7 +29,6 @@ export default function LoginPage() {
 
     setMessage("Signed in. Redirecting...");
 
-    // Force a full page navigation
     window.location.href = "/dashboard";
   }
 
@@ -96,6 +95,18 @@ export default function LoginPage() {
           >
             Don't have an account? Create one
           </Link>
+
+          <p className="text-center text-xs text-gray-500">
+            By continuing, you agree to our{" "}
+            <Link href="/terms" className="underline hover:text-white">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline hover:text-white">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </form>
       </div>
     </main>

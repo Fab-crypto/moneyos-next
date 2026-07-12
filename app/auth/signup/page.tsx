@@ -20,7 +20,6 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // If someone's already signed in, don't show them a signup form.
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
@@ -57,9 +56,6 @@ export default function SignupPage() {
       return;
     }
 
-    // If email confirmation is off, signUp returns an active session
-    // immediately. If it's on, there's a session-less user and no
-    // redirect should happen until they've verified.
     if (data.session) {
       router.push("/dashboard");
       router.refresh();
@@ -172,6 +168,18 @@ export default function SignupPage() {
             >
               Already have an account? Sign in
             </Link>
+
+            <p className="mt-1 text-center text-[12px] text-muted-foreground/70">
+              By continuing, you agree to our{" "}
+              <Link href="/terms" className="underline hover:text-foreground">
+                Terms
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="underline hover:text-foreground">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </div>
         </motion.form>
       </div>
