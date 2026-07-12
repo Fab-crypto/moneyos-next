@@ -22,7 +22,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { formatMoney, getConfidenceLabel } from "@/lib/formatters";
-import type { FinancialConfidenceResult } from "@/lib/financial-confidence";
+import type { FinancialConfidenceResult, SafeToSpendHistoryPoint } from "@/lib/financial-confidence";
 import { useMoneyMood } from "@/hooks/useMoneyMood";
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {
@@ -39,13 +39,19 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
 };
 
 const WEEKDAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+
+function getWeekdayLetter(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  return WEEKDAY_LETTERS[date.getDay()];
+}
 
 function buildSparklinePath(values: number[], width: number, height: number, padY: number): string {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
   const points = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * width;
+    const x = values.length > 1 ? (i / (values.length - 1)) * width : width / 2;
     const y = height - padY - ((v - min) / range) * (height - padY * 2);
     return [x, y] as const;
   });
@@ -57,7 +63,7 @@ function getSparklinePoints(values: number[], width: number, height: number, pad
   const max = Math.max(...values);
   const range = max - min || 1;
   return values.map((v, i) => {
-    const x = (i / (values.length - 1)) * width;
+    const x = values.length > 1 ? (i / (values.length - 1)) * width : width / 2;
     const y = height - padY - ((v - min) / range) * (height - padY * 2);
     return { x, y };
   });
@@ -71,12 +77,13 @@ interface AnalyticsClientProps {
   spendThisMonth: number;
   spendLastMonth: number;
   monthlyBudget: number;
+  hasRealBudget: boolean;
   topCategories: { name: string; amount: number }[];
   weeklyTrend: number[];
   biggestPurchase: { merchant: string; category: string; amount: number; date: string } | null;
   smartInsight: string;
   safeToSpendToday: number;
-  safeToSpendHistory: number[];
+  safeToSpendHistory: SafeToSpendHistoryPoint[];
   confidence: FinancialConfidenceResult;
 }
 
@@ -84,6 +91,7 @@ export function AnalyticsClient({
   spendThisMonth,
   spendLastMonth,
   monthlyBudget,
+  hasRealBudget,
   topCategories,
   weeklyTrend,
   biggestPurchase,
@@ -103,18 +111,20 @@ export function AnalyticsClient({
   const categoryTotal = useMemo(() => topCategories.reduce((sum, c) => sum + c.amount, 0), [topCategories]);
   const maxWeeklySpend = Math.max(...weeklyTrend, 1);
 
-  const safeToSpendTrend = useMemo(() => [...safeToSpendHistory, safeToSpendToday], [safeToSpendHistory, safeToSpendToday]);
-
   const sparklineWidth = 300;
   const sparklineHeight = 90;
   const sparklinePad = 10;
+
+  const historyValues = useMemo(() => safeToSpendHistory.map((p) => p.value), [safeToSpendHistory]);
+  const hasEnoughHistory = safeToSpendHistory.length >= 2;
+
   const sparklinePath = useMemo(
-    () => buildSparklinePath(safeToSpendTrend, sparklineWidth, sparklineHeight, sparklinePad),
-    [safeToSpendTrend]
+    () => buildSparklinePath(historyValues, sparklineWidth, sparklineHeight, sparklinePad),
+    [historyValues]
   );
   const sparklinePoints = useMemo(
-    () => getSparklinePoints(safeToSpendTrend, sparklineWidth, sparklineHeight, sparklinePad),
-    [safeToSpendTrend]
+    () => getSparklinePoints(historyValues, sparklineWidth, sparklineHeight, sparklinePad),
+    [historyValues]
   );
 
   const pageContainer: Variants = {
@@ -174,6 +184,12 @@ export function AnalyticsClient({
                         {Math.abs(monthChangePct)}% {monthChangePct >= 0 ? "more" : "less"} than last month
                       </span>
                     </div>
+                  )}
+                  {!hasRealBudget && (
+                    <p className="mt-2 text-[12px] text-muted-foreground/70">
+                      Add your monthly income in Profile for a personalized comparison — this is shown
+                      against a general estimate for now.
+                    </p>
                   )}
                 </MoneyCard>
               </motion.div>
@@ -295,60 +311,73 @@ export function AnalyticsClient({
               <motion.div variants={item} className="mt-5">
                 <MoneyCard>
                   <SectionHeader className="mb-5">Safe to Spend Trend</SectionHeader>
-                  <svg viewBox={`0 0 ${sparklineWidth} ${sparklineHeight}`} className="w-full" style={{ height: sparklineHeight }}>
-                    <defs>
-                      <linearGradient id="sparklineFade" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--gold))" stopOpacity="0.18" />
-                        <stop offset="100%" stopColor="hsl(var(--gold))" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <motion.path
-                      d={`${sparklinePath} L ${sparklineWidth} ${sparklineHeight} L 0 ${sparklineHeight} Z`}
-                      fill="url(#sparklineFade)"
-                      stroke="none"
-                      initial={{ opacity: 0 }}
-                      whileInView={{ opacity: 1 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.6, ease: EASE, delay: 0.3 }}
-                    />
-                    <motion.path
-                      d={sparklinePath}
-                      fill="none"
-                      stroke="hsl(var(--gold))"
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      initial={{ pathLength: 0 }}
-                      whileInView={{ pathLength: 1 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: reduceMotion ? 0 : 0.9, ease: EASE }}
-                    />
-                    {sparklinePoints.map((p, i) => {
-                      const isToday = i === sparklinePoints.length - 1;
-                      return (
-                        <motion.circle
-                          key={i}
-                          cx={p.x}
-                          cy={p.y}
-                          r={isToday ? 4.5 : 2.5}
-                          fill={isToday ? "hsl(var(--gold))" : "hsl(var(--background))"}
-                          stroke="hsl(var(--gold))"
-                          strokeWidth={isToday ? 0 : 1.5}
-                          initial={{ opacity: 0, scale: 0 }}
-                          whileInView={{ opacity: 1, scale: 1 }}
+                  {hasEnoughHistory ? (
+                    <>
+                      <svg
+                        viewBox={`0 0 ${sparklineWidth} ${sparklineHeight}`}
+                        className="w-full"
+                        style={{ height: sparklineHeight }}
+                      >
+                        <defs>
+                          <linearGradient id="sparklineFade" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="hsl(var(--gold))" stopOpacity="0.18" />
+                            <stop offset="100%" stopColor="hsl(var(--gold))" stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        <motion.path
+                          d={`${sparklinePath} L ${sparklineWidth} ${sparklineHeight} L 0 ${sparklineHeight} Z`}
+                          fill="url(#sparklineFade)"
+                          stroke="none"
+                          initial={{ opacity: 0 }}
+                          whileInView={{ opacity: 1 }}
                           viewport={{ once: true }}
-                          transition={{ duration: 0.3, delay: 0.6 + i * 0.05, ease: EASE }}
+                          transition={{ duration: 0.6, ease: EASE, delay: 0.3 }}
                         />
-                      );
-                    })}
-                  </svg>
-                  <div className="mt-1 flex items-center justify-between">
-                    {WEEKDAY_LABELS.map((label, i) => (
-                      <span key={i} className="flex-1 text-center text-[10px] text-muted-foreground/70">
-                        {label}
-                      </span>
-                    ))}
-                  </div>
+                        <motion.path
+                          d={sparklinePath}
+                          fill="none"
+                          stroke="hsl(var(--gold))"
+                          strokeWidth={2.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          initial={{ pathLength: 0 }}
+                          whileInView={{ pathLength: 1 }}
+                          viewport={{ once: true }}
+                          transition={{ duration: reduceMotion ? 0 : 0.9, ease: EASE }}
+                        />
+                        {sparklinePoints.map((p, i) => {
+                          const isToday = i === sparklinePoints.length - 1;
+                          return (
+                            <motion.circle
+                              key={i}
+                              cx={p.x}
+                              cy={p.y}
+                              r={isToday ? 4.5 : 2.5}
+                              fill={isToday ? "hsl(var(--gold))" : "hsl(var(--background))"}
+                              stroke="hsl(var(--gold))"
+                              strokeWidth={isToday ? 0 : 1.5}
+                              initial={{ opacity: 0, scale: 0 }}
+                              whileInView={{ opacity: 1, scale: 1 }}
+                              viewport={{ once: true }}
+                              transition={{ duration: 0.3, delay: 0.6 + i * 0.05, ease: EASE }}
+                            />
+                          );
+                        })}
+                      </svg>
+                      <div className="mt-1 flex items-center justify-between">
+                        {safeToSpendHistory.map((p, i) => (
+                          <span key={i} className="flex-1 text-center text-[10px] text-muted-foreground/70">
+                            {getWeekdayLetter(p.date)}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="py-6 text-center text-[14px] leading-relaxed text-muted-foreground">
+                      Your trend will build up over the next few days as MoneyOS records your Safe to
+                      Spend each day.
+                    </p>
+                  )}
                   <p className="mt-4 border-t border-border/50 pt-4 text-[13px] text-muted-foreground">
                     Today: <span className="tabular font-medium text-foreground/90">${formatMoney(safeToSpendToday)}</span>
                   </p>

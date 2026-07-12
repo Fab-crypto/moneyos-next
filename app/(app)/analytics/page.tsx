@@ -1,11 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { daysAgo } from "@/lib/date";
-import { getFinancialConfidence } from "@/lib/financial-confidence";
+import { getFinancialConfidence, getSafeToSpendHistory } from "@/lib/financial-confidence";
 import { AnalyticsClient } from "./AnalyticsClient";
-
-const FALLBACK_MONTHLY_BUDGET = 3200;
-const SAFE_TO_SPEND_TREND_HISTORY = [110, 95, 130, 80, 105, 90];
 
 export default async function AnalyticsPage() {
   const supabase = await createClient();
@@ -21,8 +18,8 @@ export default async function AnalyticsPage() {
   const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
 
-  const [profileResult, txResult, checkingResult, confidence] = await Promise.all([
-    supabase.from("profiles").select("monthly_income").eq("id", user.id).single(),
+  const [profileResult, txResult, confidence] = await Promise.all([
+    supabase.from("profiles").select("monthly_income").eq("id", user.id).maybeSingle(),
     supabase
       .from("transactions")
       .select("amount, category, merchant_name, name, date")
@@ -30,15 +27,15 @@ export default async function AnalyticsPage() {
       .eq("type", "expense")
       .gte("date", startOfLastMonth)
       .order("date", { ascending: false }),
-    supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
     getFinancialConfidence(supabase, user.id),
   ]);
 
-  const monthlyBudget = profileResult.data?.monthly_income || FALLBACK_MONTHLY_BUDGET;
+  const safeToSpendHistory = await getSafeToSpendHistory(supabase, user.id, 7);
 
-  const safeToSpendToday = (checkingResult.data ?? [])
-    .filter((a) => a.type === "depository" && a.subtype === "checking")
-    .reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
+  const hasRealBudget = profileResult.data?.monthly_income != null;
+  const monthlyBudget = profileResult.data?.monthly_income || 3200;
+
+  const safeToSpendToday = confidence.safeToSpend;
 
   const allTx = txResult.data ?? [];
   const thisMonthTx = allTx.filter((t) => t.date >= startOfThisMonth);
@@ -106,12 +103,13 @@ export default async function AnalyticsPage() {
       spendThisMonth={spendThisMonth}
       spendLastMonth={spendLastMonth}
       monthlyBudget={monthlyBudget}
+      hasRealBudget={hasRealBudget}
       topCategories={topCategories}
       weeklyTrend={weeklyTrend}
       biggestPurchase={biggestPurchase}
       smartInsight={smartInsight}
       safeToSpendToday={safeToSpendToday}
-      safeToSpendHistory={SAFE_TO_SPEND_TREND_HISTORY}
+      safeToSpendHistory={safeToSpendHistory}
       confidence={confidence}
     />
   );

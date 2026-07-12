@@ -6,6 +6,7 @@ export interface FinancialConfidenceResult {
   previousScore: number | null;
   isImproving: boolean;
   isFirstReading: boolean;
+  safeToSpend: number;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -109,14 +110,12 @@ export async function getFinancialConfidence(
   });
 
   const snapshots = snapshotsResult.data ?? [];
-  const todaysSnapshot = snapshots.find((s) => s.snapshot_date === today);
   const priorSnapshot = snapshots.find((s) => s.snapshot_date !== today);
 
-  if (!todaysSnapshot || todaysSnapshot.score !== score) {
-    await supabase
-      .from("financial_confidence_snapshots")
-      .upsert({ user_id: userId, score, snapshot_date: today }, { onConflict: "user_id,snapshot_date" });
-  }
+  await supabase.from("financial_confidence_snapshots").upsert(
+    { user_id: userId, score, safe_to_spend: safeToSpend, snapshot_date: today },
+    { onConflict: "user_id,snapshot_date" }
+  );
 
   const previousScore = priorSnapshot?.score ?? null;
 
@@ -125,5 +124,29 @@ export async function getFinancialConfidence(
     previousScore,
     isImproving: previousScore !== null ? score >= previousScore : false,
     isFirstReading: previousScore === null,
+    safeToSpend,
   };
+}
+
+export interface SafeToSpendHistoryPoint {
+  date: string;
+  value: number;
+}
+
+export async function getSafeToSpendHistory(
+  supabase: SupabaseClient<any, "public", any>,
+  userId: string,
+  days: number = 7
+): Promise<SafeToSpendHistoryPoint[]> {
+  const { data } = await supabase
+    .from("financial_confidence_snapshots")
+    .select("snapshot_date, safe_to_spend")
+    .eq("user_id", userId)
+    .not("safe_to_spend", "is", null)
+    .order("snapshot_date", { ascending: false })
+    .limit(days);
+
+  return (data ?? [])
+    .map((row) => ({ date: row.snapshot_date as string, value: (row.safe_to_spend as number) ?? 0 }))
+    .reverse();
 }
