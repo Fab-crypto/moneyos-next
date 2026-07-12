@@ -7,24 +7,12 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 const container = {
   hidden: {},
-  show: {
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.1,
-    },
-  },
+  show: { transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
 };
 
 const item = {
   hidden: { opacity: 0, y: 14 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.55,
-      ease: EASE,
-    },
-  },
+  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } },
 };
 
 export default function WelcomePage() {
@@ -38,9 +26,7 @@ export default function WelcomePage() {
           className="pt-[max(4rem,env(safe-area-inset-top))]"
         >
           <div className="gold-bg flex h-11 w-11 items-center justify-center rounded-xl">
-            <span className="gold-text font-heading text-lg font-semibold">
-              M
-            </span>
+            <span className="gold-text font-heading text-lg font-semibold">M</span>
           </div>
         </motion.div>
 
@@ -74,18 +60,29 @@ export default function WelcomePage() {
           className="flex flex-col gap-3 pb-[max(2.5rem,env(safe-area-inset-bottom))]"
         >
           <Link
-            href="/auth/signup"
+            href="/create-account"
             className="flex h-14 items-center justify-center rounded-xl bg-foreground text-[15px] font-medium text-background transition-opacity hover:opacity-90 active:opacity-80"
           >
             Get Started
           </Link>
-
           <Link
-            href="/auth/login"
+            href="/sign-in"
             className="flex h-14 items-center justify-center rounded-xl text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             I already have an account
           </Link>
+
+          <p className="mt-2 text-center text-[12px] text-muted-foreground/70">
+            By continuing, you agree to our{" "}
+            <Link href="/terms" className="underline hover:text-foreground">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline hover:text-foreground">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </motion.div>
       </div>
     </div>
