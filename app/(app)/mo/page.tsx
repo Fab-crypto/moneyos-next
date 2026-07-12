@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { daysAgo } from "@/lib/date";
-import { FINANCIAL_CONFIDENCE } from "@/lib/constants";
+import { getFinancialConfidence } from "@/lib/financial-confidence";
 import { MOClient } from "./MOClient";
 
 export default async function MoPage() {
@@ -14,7 +14,7 @@ export default async function MoPage() {
     redirect("/welcome");
   }
 
-  const [subResult, checkingResult, txResult, billsResult] = await Promise.all([
+  const [subResult, checkingResult, txResult, billsResult, confidence] = await Promise.all([
     supabase.from("subscriptions").select("status").eq("user_id", user.id).maybeSingle(),
     supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
     supabase
@@ -29,6 +29,7 @@ export default async function MoPage() {
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
       .limit(3),
+    getFinancialConfidence(supabase, user.id),
   ]);
 
   const isSubscribed = subResult.data?.status === "active" || subResult.data?.status === "trialing";
@@ -66,7 +67,7 @@ export default async function MoPage() {
       thisWeekFood={thisWeekFood}
       lastWeekFood={lastWeekFood}
       upcomingBills={upcomingBills}
-      financialConfidence={FINANCIAL_CONFIDENCE}
+      financialConfidence={confidence.score}
     />
   );
 }

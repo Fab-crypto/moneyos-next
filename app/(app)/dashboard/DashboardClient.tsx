@@ -9,8 +9,8 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoodBadge } from "@/components/ui/MoodBadge";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
-import { formatMoney } from "@/lib/formatters";
-import { useFinancialConfidence } from "@/hooks/useFinancialConfidence";
+import { formatMoney, getConfidenceLabel } from "@/lib/formatters";
+import type { FinancialConfidenceResult } from "@/lib/financial-confidence";
 
 interface UpcomingBill {
   id: string;
@@ -25,13 +25,20 @@ interface DashboardClientProps {
   safeToSpend: number;
   hasAccounts: boolean;
   upcomingBills: UpcomingBill[];
+  confidence: FinancialConfidenceResult;
 }
 
 const EMERGENCY_FUND_PCT = 71;
 
-export function DashboardClient({ firstName, today, safeToSpend, hasAccounts, upcomingBills }: DashboardClientProps) {
+export function DashboardClient({
+  firstName,
+  today,
+  safeToSpend,
+  hasAccounts,
+  upcomingBills,
+  confidence,
+}: DashboardClientProps) {
   const reduceMotion = useReducedMotion();
-  const confidence = useFinancialConfidence();
 
   const pageContainer: Variants = {
     hidden: {},
@@ -65,7 +72,11 @@ export function DashboardClient({ firstName, today, safeToSpend, hasAccounts, up
             <MoneyCard glow className="mt-8 p-7">
               <div className="flex items-center justify-between">
                 <SectionHeader>Financial Confidence</SectionHeader>
-                <MoodBadge label={`${confidence.score}% ${confidence.label}`} tone="success" showDot />
+                <MoodBadge
+                  label={`${confidence.score}% ${getConfidenceLabel(confidence.score)}`}
+                  tone="success"
+                  showDot
+                />
               </div>
 
               <p className="mt-8 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">

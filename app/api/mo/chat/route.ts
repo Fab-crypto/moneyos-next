@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { daysAgo } from "@/lib/date";
-import { FINANCIAL_CONFIDENCE } from "@/lib/constants";
+import { getFinancialConfidence } from "@/lib/financial-confidence";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
   const trimmedMessages = messages.slice(-10);
 
-  const [checkingResult, txResult, billsResult] = await Promise.all([
+  const [checkingResult, txResult, billsResult, confidence] = await Promise.all([
     supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
     supabase
       .from("transactions")
@@ -77,6 +77,7 @@ export async function POST(request: Request) {
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
       .limit(5),
+    getFinancialConfidence(supabase, user.id),
   ]);
 
   const safeToSpendToday = (checkingResult.data ?? [])
@@ -107,7 +108,7 @@ export async function POST(request: Request) {
     `Spent today so far: $${todaySpend.toFixed(2)}`,
     `This week's spending by category: ${categoryBreakdown}`,
     `Upcoming bills: ${upcomingBillsList}`,
-    `Financial Confidence Score: ${FINANCIAL_CONFIDENCE}% (a general wellness indicator shown elsewhere in the app; not a precise forecast)`,
+    `Financial Confidence Score: ${confidence.score}% (a general wellness indicator shown elsewhere in the app; not a precise forecast)`,
   ].join("\n");
 
   try {

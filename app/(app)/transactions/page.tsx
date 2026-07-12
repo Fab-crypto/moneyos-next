@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getFinancialConfidence } from "@/lib/financial-confidence";
 import { TransactionsClient } from "./TransactionsClient";
 import type { Transaction } from "@/types/transaction";
 
@@ -15,7 +16,7 @@ export default async function TransactionsPage() {
     redirect("/welcome");
   }
 
-  const [txResult, accountsResult, institutionsResult, checkingResult] = await Promise.all([
+  const [txResult, accountsResult, institutionsResult, checkingResult, confidence] = await Promise.all([
     supabase
       .from("transactions")
       .select("id, name, merchant_name, amount, type, category, date, account_id")
@@ -25,6 +26,7 @@ export default async function TransactionsPage() {
     supabase.from("accounts").select("id, name, institution_id"),
     supabase.from("institutions").select("id, name"),
     supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
+    getFinancialConfidence(supabase, user.id),
   ]);
 
   const institutionNameById = new Map((institutionsResult.data ?? []).map((i) => [i.id, i.name]));
@@ -59,5 +61,5 @@ export default async function TransactionsPage() {
     .filter((a) => a.type === "depository" && a.subtype === "checking")
     .reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
 
-  return <TransactionsClient transactions={transactions} safeToSpendToday={safeToSpendToday} />;
+  return <TransactionsClient transactions={transactions} safeToSpendToday={safeToSpendToday} confidence={confidence} />;
 }

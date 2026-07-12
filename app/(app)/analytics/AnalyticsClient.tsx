@@ -21,8 +21,8 @@ import { MoodBadge } from "@/components/ui/MoodBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
-import { formatMoney } from "@/lib/formatters";
-import { useFinancialConfidence } from "@/hooks/useFinancialConfidence";
+import { formatMoney, getConfidenceLabel } from "@/lib/formatters";
+import type { FinancialConfidenceResult } from "@/lib/financial-confidence";
 import { useMoneyMood } from "@/hooks/useMoneyMood";
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {
@@ -77,6 +77,7 @@ interface AnalyticsClientProps {
   smartInsight: string;
   safeToSpendToday: number;
   safeToSpendHistory: number[];
+  confidence: FinancialConfidenceResult;
 }
 
 export function AnalyticsClient({
@@ -89,9 +90,9 @@ export function AnalyticsClient({
   smartInsight,
   safeToSpendToday,
   safeToSpendHistory,
+  confidence,
 }: AnalyticsClientProps) {
   const reduceMotion = useReducedMotion();
-  const confidence = useFinancialConfidence();
   const monthMood = useMoneyMood(spendThisMonth, monthlyBudget);
 
   const monthChangePct = useMemo(() => {
@@ -241,12 +242,18 @@ export function AnalyticsClient({
                 <MoneyCard>
                   <div className="flex items-center justify-between">
                     <SectionHeader>Financial Confidence</SectionHeader>
-                    <MoodBadge label={`${confidence.score}% ${confidence.label}`} tone="success" showDot />
+                    <MoodBadge
+                      label={`${confidence.score}% ${getConfidenceLabel(confidence.score)}`}
+                      tone="success"
+                      showDot
+                    />
                   </div>
                   <p className="mt-3 text-[14px] text-muted-foreground">
-                    {confidence.isImproving
-                      ? `Up from ${confidence.previousScore}% last week.`
-                      : `Steady compared to ${confidence.previousScore}% last week.`}
+                    {confidence.isFirstReading
+                      ? "This is your first Financial Confidence reading — check back to see how it changes over time."
+                      : confidence.isImproving
+                        ? `Up from ${confidence.previousScore}% previously.`
+                        : `Steady compared to ${confidence.previousScore}% previously.`}
                   </p>
                 </MoneyCard>
               </motion.div>

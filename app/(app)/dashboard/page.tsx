@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatWeekdayDate } from "@/lib/date";
+import { getFinancialConfidence } from "@/lib/financial-confidence";
 import { DashboardClient } from "./DashboardClient";
 
 function formatDueLabel(nextDueDate: string | null): string {
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
     redirect("/welcome");
   }
 
-  const [profileResult, accountsResult, billsResult] = await Promise.all([
+  const [profileResult, accountsResult, billsResult, confidence] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user.id).single(),
     supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
     supabase
@@ -34,6 +35,7 @@ export default async function DashboardPage() {
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
       .limit(3),
+    getFinancialConfidence(supabase, user.id),
   ]);
 
   const name = profileResult.data?.full_name?.trim().split(" ")[0];
@@ -60,6 +62,7 @@ export default async function DashboardPage() {
       safeToSpend={safeToSpend}
       hasAccounts={hasAccounts}
       upcomingBills={upcomingBills}
+      confidence={confidence}
     />
   );
 }

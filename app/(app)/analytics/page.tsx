@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { daysAgo } from "@/lib/date";
+import { getFinancialConfidence } from "@/lib/financial-confidence";
 import { AnalyticsClient } from "./AnalyticsClient";
 
 const FALLBACK_MONTHLY_BUDGET = 3200;
@@ -20,7 +21,7 @@ export default async function AnalyticsPage() {
   const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
 
-  const [profileResult, txResult, checkingResult] = await Promise.all([
+  const [profileResult, txResult, checkingResult, confidence] = await Promise.all([
     supabase.from("profiles").select("monthly_income").eq("id", user.id).single(),
     supabase
       .from("transactions")
@@ -30,6 +31,7 @@ export default async function AnalyticsPage() {
       .gte("date", startOfLastMonth)
       .order("date", { ascending: false }),
     supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
+    getFinancialConfidence(supabase, user.id),
   ]);
 
   const monthlyBudget = profileResult.data?.monthly_income || FALLBACK_MONTHLY_BUDGET;
@@ -110,6 +112,7 @@ export default async function AnalyticsPage() {
       smartInsight={smartInsight}
       safeToSpendToday={safeToSpendToday}
       safeToSpendHistory={SAFE_TO_SPEND_TREND_HISTORY}
+      confidence={confidence}
     />
   );
 }

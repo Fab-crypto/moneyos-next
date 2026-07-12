@@ -16,7 +16,7 @@ import { formatMoney } from "@/lib/formatters";
 import { daysAgo, formatFullDate, formatShortDate, groupTransactionsByDate } from "@/lib/date";
 import { useMoneyMood } from "@/hooks/useMoneyMood";
 import { useDailyInsight } from "@/hooks/useDailyInsight";
-import { useFinancialConfidence } from "@/hooks/useFinancialConfidence";
+import type { FinancialConfidenceResult } from "@/lib/financial-confidence";
 import type { Transaction, TransactionFilter } from "@/types/transaction";
 
 const AVATAR_PALETTE = [
@@ -68,15 +68,14 @@ function getSafeToSpendStatus(ratio: number): string {
 interface TransactionsClientProps {
   transactions: Transaction[];
   safeToSpendToday: number;
+  confidence: FinancialConfidenceResult;
 }
 
-export function TransactionsClient({ transactions, safeToSpendToday }: TransactionsClientProps) {
+export function TransactionsClient({ transactions, safeToSpendToday, confidence }: TransactionsClientProps) {
   const reduceMotion = useReducedMotion();
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<TransactionFilter>("all");
   const [selected, setSelected] = useState<Transaction | null>(null);
-
-  const confidence = useFinancialConfidence();
 
   const todaySpendTotal = useMemo(() => {
     const today = daysAgo(0);
@@ -145,7 +144,8 @@ export function TransactionsClient({ transactions, safeToSpendToday }: Transacti
               <div className="mt-5 flex items-center justify-between border-t border-border/50 pt-4">
                 <span className="text-[13px] text-muted-foreground">Financial Confidence</span>
                 <span className="text-[13px] font-medium text-success/90">
-                  {confidence.score}% {confidence.isImproving ? "· Higher than last week" : ""}
+                  {confidence.score}%{" "}
+                  {confidence.isFirstReading ? "· First reading" : confidence.isImproving ? "· Trending up" : "· Steady"}
                 </span>
               </div>
             </MoneyCard>
