@@ -135,7 +135,7 @@ export async function refreshRecurringBills(
 
     const { error: upsertError } = await admin
       .from("recurring_transactions")
-      .upsert(rows, { onConflict: "user_id,name" });
+      .upsert(rows, { onConflict: "user_id,name,account_id" });
 
     if (upsertError) {
       console.error(`[recurring] failed to upsert detected bills for user=${userId}:`, upsertError);
@@ -143,18 +143,20 @@ export async function refreshRecurringBills(
     }
   }
 
-  const detectedNames = new Set(detected.map((b) => b.name));
+  const detectedKeys = new Set(detected.map((b) => `${b.name}|${b.accountId}`));
 
   const { data: existingActive, error: existingError } = await admin
     .from("recurring_transactions")
-    .select("id, name")
+    .select("id, name, account_id")
     .eq("user_id", userId)
     .eq("is_active", true);
 
   if (existingError) {
     console.error(`[recurring] failed to fetch existing bills for user=${userId}:`, existingError);
   } else {
-    const staleIds = (existingActive ?? []).filter((b) => !detectedNames.has(b.name)).map((b) => b.id);
+    const staleIds = (existingActive ?? [])
+      .filter((b) => !detectedKeys.has(`${b.name}|${b.account_id}`))
+      .map((b) => b.id);
 
     if (staleIds.length > 0) {
       const { error: deactivateError } = await admin
