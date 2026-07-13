@@ -13,7 +13,11 @@ export default async function ProfilePage() {
   }
 
   const [profileResult, institutionsResult, subscriptionResult] = await Promise.all([
-    supabase.from("profiles").select("full_name, created_at, notifications_enabled").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("full_name, created_at, notifications_enabled, monthly_income")
+      .eq("id", user.id)
+      .maybeSingle(),
     supabase.from("institutions").select("id, name").eq("user_id", user.id).order("name"),
     supabase.from("subscriptions").select("status, current_period_end").eq("user_id", user.id).maybeSingle(),
   ]);
@@ -44,6 +48,7 @@ export default async function ProfilePage() {
       memberSince={memberSince}
       connectedBanks={connectedBanks}
       initialNotificationsEnabled={profileResult.data?.notifications_enabled ?? true}
+      initialMonthlyIncome={profileResult.data?.monthly_income ?? null}
       isSubscribed={isSubscribed}
     />
   );

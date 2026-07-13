@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Building2,
   Loader2,
+  DollarSign,
 } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -34,6 +35,7 @@ interface ProfileClientProps {
   memberSince: string | null;
   connectedBanks: ConnectedBank[];
   initialNotificationsEnabled: boolean;
+  initialMonthlyIncome: number | null;
   isSubscribed: boolean;
 }
 
@@ -42,6 +44,7 @@ export function ProfileClient({
   memberSince,
   connectedBanks,
   initialNotificationsEnabled,
+  initialMonthlyIncome,
   isSubscribed,
 }: ProfileClientProps) {
   const reduceMotion = useReducedMotion();
@@ -88,6 +91,10 @@ export function ProfileClient({
           </motion.div>
 
           <motion.div variants={item} className="mt-5">
+            <MonthlyIncomeCard initialValue={initialMonthlyIncome} />
+          </motion.div>
+
+          <motion.div variants={item} className="mt-5">
             <ConnectedBanksCard banks={connectedBanks} />
           </motion.div>
 
@@ -131,6 +138,110 @@ function ProfileHeader({ name, memberSince }: { name: string; memberSince: strin
           {memberSince && <p className="mt-0.5 text-xs text-muted-foreground">Since {memberSince}</p>}
         </div>
       </div>
+    </MoneyCard>
+  );
+}
+
+/** Closes a gap Analytics surfaced honestly: without a real monthly
+ *  income on file, Analytics falls back to a generic $3,200 estimate
+ *  and says so. This lets the user set the real number, which Analytics
+ *  then compares spending against instead of guessing. */
+function MonthlyIncomeCard({ initialValue }: { initialValue: number | null }) {
+  const [value, setValue] = useState(initialValue !== null ? String(initialValue) : "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const savedValue = initialValue !== null ? String(initialValue) : "";
+  const isDirty = value !== savedValue;
+
+  async function handleSave() {
+    setError(null);
+
+    const trimmed = value.trim();
+    let parsed: number | null = null;
+
+    if (trimmed !== "") {
+      parsed = Number(trimmed);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        setError("Enter a valid amount.");
+        return;
+      }
+    }
+
+    setSaving(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setSaving(false);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ monthly_income: parsed })
+      .eq("id", user.id);
+
+    if (updateError) {
+      console.error("[profile] failed to save monthly income:", updateError);
+      setError("Failed to save. Please try again.");
+      setSaving(false);
+      return;
+    }
+
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  return (
+    <MoneyCard>
+      <SectionHeader icon={DollarSign} iconClassName="text-muted-foreground">
+        Monthly Income
+      </SectionHeader>
+      <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+        Used to compare your real spending against your real budget in Analytics, instead of a
+        generic estimate.
+      </p>
+
+      <div className="mt-4 flex items-center gap-2">
+        <div className="relative flex-1">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[15px] text-muted-foreground">
+            $
+          </span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.01"
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setError(null);
+            }}
+            disabled={saving}
+            placeholder="Not set"
+            className="w-full rounded-xl border-0 bg-muted py-3 pl-8 pr-4 text-[15px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-50"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !isDirty}
+          className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-foreground px-4 text-sm font-medium text-background transition-opacity disabled:opacity-40 [@media(hover:hover)]:hover:opacity-90"
+        >
+          {saving && <Loader2 size={14} className="animate-spin" />}
+          {saving ? "Saving..." : saved ? "Saved" : "Save"}
+        </button>
+      </div>
+
+      {error && (
+        <p className="mt-2 text-xs font-medium text-danger" role="alert">
+          {error}
+        </p>
+      )}
     </MoneyCard>
   );
 }
@@ -370,13 +481,10 @@ function SubscriptionRow({ isSubscribed }: { isSubscribed: boolean }) {
   );
 }
 
-/** Delete Account — inline confirm step, no modal dependency. Requires
- *  password re-confirmation before it fires (guards against someone
- *  deleting the account from an already-logged-in session on a shared
- *  or unlocked device). Calls /api/account/delete, which revokes every
- *  connected Plaid item, cancels any active Stripe subscription, then
- *  deletes the Supabase Auth user (cascading through every other
- *  table). */
+/** Delete Account — inline confirm step, no modal dependency. Calls
+ *  /api/account/delete, which revokes every connected Plaid item,
+ *  cancels any active Stripe subscription, then deletes the Supabase
+ *  Auth user (cascading through every other table). */
 function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
   const [password, setPassword] = useState("");
