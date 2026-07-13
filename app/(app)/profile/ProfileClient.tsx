@@ -19,6 +19,7 @@ import {
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoneyButton } from "@/components/ui/MoneyButton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { supabase } from "@/lib/supabase";
@@ -364,8 +365,36 @@ function SubscriptionRow({ isSubscribed }: { isSubscribed: boolean }) {
   );
 }
 
+/** Delete Account — inline confirm step, no modal dependency. Calls
+ *  /api/account/delete, which revokes every connected Plaid item,
+ *  cancels any active Stripe subscription, then deletes the Supabase
+ *  Auth user (cascading through every other table). */
 function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/account/delete", { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error ?? "Failed to delete account. Please try again.");
+        setDeleting(false);
+        return;
+      }
+
+      await supabase.auth.signOut();
+      window.location.href = "/welcome";
+    } catch (err) {
+      console.error("[profile] account deletion request failed:", err);
+      setError("Failed to delete account. Please try again.");
+      setDeleting(false);
+    }
+  }
 
   return (
     <MoneyCard>
@@ -378,21 +407,31 @@ function DeleteAccountCard() {
         <div>
           <p className="text-sm font-medium text-foreground">Delete your account?</p>
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            This permanently deletes your accounts, transactions, and goals. This can't be undone.
+            This permanently deletes your accounts, transactions, and goals, disconnects every bank
+            you've linked, and cancels any active subscription. This can't be undone.
           </p>
+          {error && (
+            <p className="mt-3 text-xs font-medium text-danger" role="alert">
+              {error}
+            </p>
+          )}
           <div className="mt-4 flex gap-3">
             <button
               type="button"
               onClick={() => setConfirming(false)}
-              className="h-11 flex-1 rounded-xl bg-muted text-sm font-medium text-foreground transition-colors [@media(hover:hover)]:hover:bg-muted/80"
+              disabled={deleting}
+              className="h-11 flex-1 rounded-xl bg-muted text-sm font-medium text-foreground transition-colors disabled:opacity-50 [@media(hover:hover)]:hover:bg-muted/80"
             >
               Cancel
             </button>
             <button
               type="button"
-              className="h-11 flex-1 rounded-xl bg-destructive text-sm font-medium text-destructive-foreground transition-opacity hover:opacity-90"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-destructive text-sm font-medium text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Delete
+              {deleting && <Loader2 size={14} className="animate-spin" />}
+              {deleting ? "Deleting..." : "Delete"}
             </button>
           </div>
         </div>
