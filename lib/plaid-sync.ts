@@ -1,6 +1,7 @@
 import "server-only";
 import { plaidClient } from "@/lib/plaid";
 import { decryptToken } from "@/lib/crypto";
+import { refreshRecurringBills } from "@/lib/recurring";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 interface PlaidItemRow {
@@ -136,6 +137,12 @@ export async function syncPlaidItemTransactions(
       console.log(`[plaid-sync] item=${item.plaid_item_id} refreshed ${balanceUpdates.length} account balance(s)`);
     } catch (balanceErr) {
       console.error(`[plaid-sync] item=${item.plaid_item_id} balance refresh failed (non-fatal):`, balanceErr);
+    }
+
+    try {
+      await refreshRecurringBills(admin, userId);
+    } catch (recurringErr) {
+      console.error(`[plaid-sync] item=${item.plaid_item_id} recurring bill refresh failed (non-fatal):`, recurringErr);
     }
 
     const { error: cursorError } = await admin

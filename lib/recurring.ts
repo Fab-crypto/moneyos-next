@@ -1,0 +1,172 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export const RECURRING_WINDOW_DAYS = 90;
+
+interface TxInput {
+  merchant_name: string | null;
+  name: string;
+  amount: number;
+  date: string;
+  account_id: string;
+  type: string;
+}
+
+export interface RecurringBillResult {
+  name: string;
+  accountId: string;
+  amount: number;
+  frequency: "weekly" | "biweekly" | "monthly";
+  nextDueDate: string;
+}
+
+function normalizeMerchant(description: string): string {
+  return (description || "")
+    .toLowerCase()
+    .replace(/[#*].*$/g, "")
+    .replace(/\d{2,}/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const CADENCES = [
+  { name: "weekly" as const, days: 7, tolerance: 2 },
+  { name: "biweekly" as const, days: 14, tolerance: 3 },
+  { name: "monthly" as const, days: 30, tolerance: 4 },
+];
+
+function classifyCadence(avgGapDays: number) {
+  return CADENCES.find((c) => Math.abs(avgGapDays - c.days) <= c.tolerance) ?? null;
+}
+
+function daysBetween(a: string, b: string): number {
+  return (new Date(b + "T00:00:00").getTime() - new Date(a + "T00:00:00").getTime()) / 86_400_000;
+}
+
+export function detectRecurringBills(transactions: TxInput[]): RecurringBillResult[] {
+  const groups = new Map<string, TxInput[]>();
+
+  for (const t of transactions) {
+    if (t.type !== "expense") continue;
+    const label = t.merchant_name || t.name;
+    if (!label || t.amount == null || !t.date) continue;
+    const key = `${normalizeMerchant(label)}|${t.account_id}`;
+    const list = groups.get(key) ?? [];
+    list.push(t);
+    groups.set(key, list);
+  }
+
+  const results: RecurringBillResult[] = [];
+
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date));
+
+    const amounts = sorted.map((t) => Math.abs(t.amount));
+    const avgAmount = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+    if (avgAmount === 0) continue;
+    const amountsMatch = amounts.every((a) => Math.abs(a - avgAmount) / avgAmount <= 0.12);
+    if (!amountsMatch) continue;
+
+    const gaps: number[] = [];
+    for (let i = 1; i < sorted.length; i++) {
+      gaps.push(daysBetween(sorted[i - 1].date, sorted[i].date));
+    }
+    const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+    const cadence = classifyCadence(avgGap);
+    if (!cadence) continue;
+
+    const gapsConsistent = gaps.every((g) => Math.abs(g - cadence.days) <= cadence.tolerance + 2);
+    if (!gapsConsistent) continue;
+
+    const last = sorted[sorted.length - 1];
+    const today = new Date().toISOString().slice(0, 10);
+    const lastIsFuture = last.date >= today;
+
+    const nextDueDate = lastIsFuture
+      ? last.date
+      : new Date(new Date(last.date + "T00:00:00").getTime() + cadence.days * 86_400_000)
+          .toISOString()
+          .slice(0, 10);
+
+    results.push({
+      name: last.merchant_name || last.name,
+      accountId: last.account_id,
+      amount: avgAmount,
+      frequency: cadence.name,
+      nextDueDate,
+    });
+  }
+
+  return results;
+}
+
+export async function refreshRecurringBills(
+  admin: SupabaseClient<any, "public", any>,
+  userId: string
+): Promise<void> {
+  const windowStart = new Date(Date.now() - RECURRING_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
+
+  const { data: transactions, error: txError } = await admin
+    .from("transactions")
+    .select("merchant_name, name, amount, date, account_id, type")
+    .eq("user_id", userId)
+    .eq("is_removed", false)
+    .gte("date", windowStart);
+
+  if (txError) {
+    console.error(`[recurring] failed to fetch transactions for user=${userId}:`, txError);
+    return;
+  }
+
+  const detected = detectRecurringBills(transactions ?? []);
+
+  if (detected.length > 0) {
+    const rows = detected.map((bill) => ({
+      user_id: userId,
+      account_id: bill.accountId,
+      name: bill.name,
+      amount: bill.amount,
+      frequency: bill.frequency,
+      next_due_date: bill.nextDueDate,
+      is_active: true,
+    }));
+
+    const { error: upsertError } = await admin
+      .from("recurring_transactions")
+      .upsert(rows, { onConflict: "user_id,name" });
+
+    if (upsertError) {
+      console.error(`[recurring] failed to upsert detected bills for user=${userId}:`, upsertError);
+      return;
+    }
+  }
+
+  const detectedNames = new Set(detected.map((b) => b.name));
+
+  const { data: existingActive, error: existingError } = await admin
+    .from("recurring_transactions")
+    .select("id, name")
+    .eq("user_id", userId)
+    .eq("is_active", true);
+
+  if (existingError) {
+    console.error(`[recurring] failed to fetch existing bills for user=${userId}:`, existingError);
+  } else {
+    const staleIds = (existingActive ?? []).filter((b) => !detectedNames.has(b.name)).map((b) => b.id);
+
+    if (staleIds.length > 0) {
+      const { error: deactivateError } = await admin
+        .from("recurring_transactions")
+        .update({ is_active: false })
+        .in("id", staleIds);
+
+      if (deactivateError) {
+        console.error(`[recurring] failed to deactivate stale bills for user=${userId}:`, deactivateError);
+      }
+    }
+  }
+
+  console.log(`[recurring] user=${userId} detected ${detected.length} recurring bill(s)`);
+}
