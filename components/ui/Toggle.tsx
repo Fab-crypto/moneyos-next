@@ -1,0 +1,35 @@
+"use client";
+
+import { motion } from "framer-motion";
+
+interface ToggleProps {
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+  label?: string;
+}
+
+export function Toggle({ checked, onChange, disabled = false, label }: ToggleProps) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onChange}
+      disabled={disabled}
+      className={`relative h-7 w-[52px] shrink-0 rounded-full transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+        checked ? "bg-gold" : "bg-muted"
+      }`}
+    >
+      <motion.span
+        animate={{ x: checked ? 24 : 2 }}
+        transition={{ type: "spring", stiffness: 500, damping: 32 }}
+        className="absolute top-0.5 h-6 w-6 rounded-full bg-white"
+        style={{
+          boxShadow: "0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.24), 0 0 0 0.5px rgba(0,0,0,0.06)",
+        }}
+      />
+    </button>
+  );
+}

@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   } else {
     const { error } = await supabase
       .from("recurring_transactions")
-      .update({ is_active: false })
+      .update({ is_active: false, source: "manual" })
       .eq("user_id", user.id)
       .eq("name", body.name)
       .eq("account_id", body.accountId);
