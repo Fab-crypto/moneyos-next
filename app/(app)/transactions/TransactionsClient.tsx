@@ -11,6 +11,7 @@ import { Chip } from "@/components/ui/Chip";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Toggle } from "@/components/ui/Toggle";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { formatMoney } from "@/lib/formatters";
@@ -300,22 +301,7 @@ function TransactionDetailContent({ transaction }: { transaction: Transaction })
 
         <div className="flex items-center justify-between gap-4">
           <span className="text-[13px] text-muted-foreground">Recurring</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={recurring}
-            onClick={handleToggleRecurring}
-            disabled={saving}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-              recurring ? "bg-gold" : "bg-muted"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-background transition-transform ${
-                recurring ? "translate-x-5" : "translate-x-0.5"
-              }`}
-            />
-          </button>
+          <Toggle checked={recurring} onChange={handleToggleRecurring} disabled={saving} label="Recurring" />
         </div>
 
         <DetailRow label="Notes" value={transaction.notes ?? "No notes added"} muted={!transaction.notes} />
