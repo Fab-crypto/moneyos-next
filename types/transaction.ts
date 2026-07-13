@@ -6,10 +6,9 @@ export interface Transaction {
   merchant: string;
   category: string;
   account: string;
+  accountId: string;
   type: TransactionType;
-  /** ISO date, yyyy-mm-dd */
   date: string;
-  /** Always positive — sign and color are derived from `type` at render time. */
   amount: number;
   notes?: string;
   recurring?: boolean;

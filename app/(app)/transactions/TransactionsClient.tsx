@@ -251,6 +251,37 @@ function TransactionRow({ transaction, onSelect }: { transaction: Transaction; o
 
 function TransactionDetailContent({ transaction }: { transaction: Transaction }) {
   const isIncome = transaction.type === "income";
+  const [recurring, setRecurring] = useState(!!transaction.recurring);
+  const [saving, setSaving] = useState(false);
+
+  async function handleToggleRecurring() {
+    const next = !recurring;
+    setRecurring(next);
+    setSaving(true);
+
+    try {
+      const response = await fetch("/api/recurring/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: transaction.merchant,
+          accountId: transaction.accountId,
+          amount: transaction.amount,
+          date: transaction.date,
+          makeRecurring: next,
+        }),
+      });
+
+      if (!response.ok) {
+        setRecurring(!next);
+      }
+    } catch (err) {
+      console.error("[transactions] recurring toggle failed:", err);
+      setRecurring(!next);
+    }
+    setSaving(false);
+  }
+
   return (
     <>
       <div className="flex items-center gap-3">
@@ -266,7 +297,27 @@ function TransactionDetailContent({ transaction }: { transaction: Transaction })
         <DetailRow label="Category" value={transaction.category} />
         <DetailRow label="Account" value={transaction.account} />
         <DetailRow label="Date" value={formatFullDate(transaction.date)} />
-        <DetailRow label="Recurring" value={transaction.recurring ? "Yes" : "No"} />
+
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-[13px] text-muted-foreground">Recurring</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={recurring}
+            onClick={handleToggleRecurring}
+            disabled={saving}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+              recurring ? "bg-gold" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-background transition-transform ${
+                recurring ? "translate-x-5" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
+
         <DetailRow label="Notes" value={transaction.notes ?? "No notes added"} muted={!transaction.notes} />
       </div>
     </>
