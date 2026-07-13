@@ -21,6 +21,7 @@ import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoneyButton } from "@/components/ui/MoneyButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Toggle } from "@/components/ui/Toggle";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { supabase } from "@/lib/supabase";
@@ -142,10 +143,6 @@ function ProfileHeader({ name, memberSince }: { name: string; memberSince: strin
   );
 }
 
-/** Closes a gap Analytics surfaced honestly: without a real monthly
- *  income on file, Analytics falls back to a generic $3,200 estimate
- *  and says so. This lets the user set the real number, which Analytics
- *  then compares spending against instead of guessing. */
 function MonthlyIncomeCard({ initialValue }: { initialValue: number | null }) {
   const [value, setValue] = useState(initialValue !== null ? String(initialValue) : "");
   const [saving, setSaving] = useState(false);
@@ -352,23 +349,7 @@ function ToggleRow({
         <Icon size={16} className="text-muted-foreground" />
         <span className="text-sm text-foreground">{label}</span>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${
-          checked ? "bg-gold" : "bg-muted"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-background transition-transform ${
-            checked ? "translate-x-5" : "translate-x-0.5"
-          }`}
-        />
-      </button>
+      <Toggle checked={checked} onChange={() => onChange(!checked)} disabled={disabled} label={label} />
     </div>
   );
 }
@@ -388,11 +369,6 @@ function NavRow({ icon: Icon, label }: { icon: typeof Shield; label: string }) {
   );
 }
 
-/** Shows real subscription state, fetched server-side from the
- *  `subscriptions` table (kept in sync by the Stripe webhook). An
- *  active subscriber gets a real "Manage Subscription" action that
- *  opens Stripe's own Customer Portal — cancel, change payment method,
- *  view invoices — rather than starting a second checkout. */
 function SubscriptionRow({ isSubscribed }: { isSubscribed: boolean }) {
   const [loading, setLoading] = useState(false);
 
@@ -481,10 +457,6 @@ function SubscriptionRow({ isSubscribed }: { isSubscribed: boolean }) {
   );
 }
 
-/** Delete Account — inline confirm step, no modal dependency. Calls
- *  /api/account/delete, which revokes every connected Plaid item,
- *  cancels any active Stripe subscription, then deletes the Supabase
- *  Auth user (cascading through every other table). */
 function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
   const [password, setPassword] = useState("");
