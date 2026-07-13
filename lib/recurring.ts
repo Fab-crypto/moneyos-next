@@ -149,7 +149,8 @@ export async function refreshRecurringBills(
     .from("recurring_transactions")
     .select("id, name, account_id")
     .eq("user_id", userId)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .eq("source", "detected");
 
   if (existingError) {
     console.error(`[recurring] failed to fetch existing bills for user=${userId}:`, existingError);
