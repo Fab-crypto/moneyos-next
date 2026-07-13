@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
 import { Sparkle } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
@@ -73,7 +74,8 @@ interface TransactionsClientProps {
 
 export function TransactionsClient({ transactions, safeToSpendToday, confidence }: TransactionsClientProps) {
   const reduceMotion = useReducedMotion();
-  const [search, setSearch] = useState("");
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [activeFilter, setActiveFilter] = useState<TransactionFilter>("all");
   const [selected, setSelected] = useState<Transaction | null>(null);
 

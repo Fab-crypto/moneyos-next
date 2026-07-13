@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import {
   TrendingUp,
@@ -291,10 +292,13 @@ export function AnalyticsClient({
                         ${formatMoney(biggestPurchase.amount)}
                       </p>
                     </div>
-                    <div className="mt-4 flex items-center gap-1 border-t border-border/50 pt-4 text-[13px] font-medium text-muted-foreground">
+                    <Link
+                      href={`/transactions?search=${encodeURIComponent(biggestPurchase.merchant)}`}
+                      className="mt-4 flex items-center gap-1 border-t border-border/50 pt-4 text-[13px] font-medium text-muted-foreground transition-colors [@media(hover:hover)]:hover:text-foreground"
+                    >
                       View transaction
                       <ArrowRight size={12} />
-                    </div>
+                    </Link>
                   </MoneyCard>
                 </motion.div>
               )}
