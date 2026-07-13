@@ -60,7 +60,7 @@ export function detectRecurringBills(transactions: TxInput[]): RecurringBillResu
   const results: RecurringBillResult[] = [];
 
   for (const list of groups.values()) {
-    if (list.length < 2) continue;
+    if (list.length < 3) continue;
     const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date));
 
     const amounts = sorted.map((t) => Math.abs(t.amount));
