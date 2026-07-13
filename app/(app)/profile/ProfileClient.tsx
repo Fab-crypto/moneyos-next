@@ -277,6 +277,11 @@ function NavRow({ icon: Icon, label }: { icon: typeof Shield; label: string }) {
   );
 }
 
+/** Shows real subscription state, fetched server-side from the
+ *  `subscriptions` table (kept in sync by the Stripe webhook). An
+ *  active subscriber gets a real "Manage Subscription" action that
+ *  opens Stripe's own Customer Portal — cancel, change payment method,
+ *  view invoices — rather than starting a second checkout. */
 function SubscriptionRow({ isSubscribed }: { isSubscribed: boolean }) {
   const [loading, setLoading] = useState(false);
 
@@ -365,18 +370,49 @@ function SubscriptionRow({ isSubscribed }: { isSubscribed: boolean }) {
   );
 }
 
-/** Delete Account — inline confirm step, no modal dependency. Calls
- *  /api/account/delete, which revokes every connected Plaid item,
- *  cancels any active Stripe subscription, then deletes the Supabase
- *  Auth user (cascading through every other table). */
+/** Delete Account — inline confirm step, no modal dependency. Requires
+ *  password re-confirmation before it fires (guards against someone
+ *  deleting the account from an already-logged-in session on a shared
+ *  or unlocked device). Calls /api/account/delete, which revokes every
+ *  connected Plaid item, cancels any active Stripe subscription, then
+ *  deletes the Supabase Auth user (cascading through every other
+ *  table). */
 function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
+  const [password, setPassword] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleDelete() {
+    if (!password) {
+      setError("Enter your password to confirm.");
+      return;
+    }
+
     setDeleting(true);
     setError(null);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user?.email) {
+      setError("Could not verify your account. Please try again.");
+      setDeleting(false);
+      return;
+    }
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password,
+    });
+
+    if (verifyError) {
+      setError("Incorrect password.");
+      setDeleting(false);
+      return;
+    }
+
     try {
       const response = await fetch("/api/account/delete", { method: "POST" });
       const data = await response.json();
@@ -410,6 +446,19 @@ function DeleteAccountCard() {
             This permanently deletes your accounts, transactions, and goals, disconnects every bank
             you've linked, and cancels any active subscription. This can't be undone.
           </p>
+
+          <label className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Confirm your password
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={deleting}
+            autoComplete="current-password"
+            className="mt-2 w-full rounded-xl border-0 bg-muted px-4 py-3 text-[15px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-50"
+          />
+
           {error && (
             <p className="mt-3 text-xs font-medium text-danger" role="alert">
               {error}
@@ -418,7 +467,11 @@ function DeleteAccountCard() {
           <div className="mt-4 flex gap-3">
             <button
               type="button"
-              onClick={() => setConfirming(false)}
+              onClick={() => {
+                setConfirming(false);
+                setPassword("");
+                setError(null);
+              }}
               disabled={deleting}
               className="h-11 flex-1 rounded-xl bg-muted text-sm font-medium text-foreground transition-colors disabled:opacity-50 [@media(hover:hover)]:hover:bg-muted/80"
             >
@@ -427,7 +480,7 @@ function DeleteAccountCard() {
             <button
               type="button"
               onClick={handleDelete}
-              disabled={deleting}
+              disabled={deleting || !password}
               className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-destructive text-sm font-medium text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {deleting && <Loader2 size={14} className="animate-spin" />}
