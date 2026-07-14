@@ -19,13 +19,13 @@ export function Toggle({ checked, onChange, disabled = false, label }: TogglePro
       onClick={onChange}
       disabled={disabled}
       className={`relative h-7 w-[52px] shrink-0 rounded-full transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? "bg-gold" : "bg-muted"
+        checked ? "bg-neutral-900" : "bg-neutral-300"
       }`}
     >
       <motion.span
         animate={{ x: checked ? 24 : 2 }}
         transition={{ type: "spring", stiffness: 500, damping: 32 }}
-        className="absolute top-0.5 h-6 w-6 rounded-full bg-white"
+        className={`absolute top-0.5 h-6 w-6 rounded-full ${checked ? "bg-white" : "bg-neutral-800"}`}
         style={{
           boxShadow: "0 1px 2px rgba(0,0,0,0.25), 0 0 0 0.5px rgba(0,0,0,0.08)",
         }}
