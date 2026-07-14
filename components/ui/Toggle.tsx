@@ -25,7 +25,7 @@ export function Toggle({ checked, onChange, disabled = false, label }: TogglePro
       <motion.span
         animate={{ x: checked ? 24 : 2 }}
         transition={{ type: "spring", stiffness: 500, damping: 32 }}
-        className={`absolute top-0.5 h-6 w-6 rounded-full ${checked ? "bg-white" : "bg-neutral-800"}`}
+        className={`absolute left-0 top-0.5 h-6 w-6 rounded-full ${checked ? "bg-white" : "bg-neutral-800"}`}
         style={{
           boxShadow: "0 1px 2px rgba(0,0,0,0.25), 0 0 0 0.5px rgba(0,0,0,0.08)",
         }}
