@@ -4,12 +4,17 @@ import { formatWeekdayDate } from "@/lib/date";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
 import { DashboardClient } from "./DashboardClient";
 
-function formatDueLabel(nextDueDate: string | null): string {
-  if (!nextDueDate) return "Due date not set";
+function getDaysUntilDue(nextDueDate: string | null): number | null {
+  if (!nextDueDate) return null;
   const due = new Date(nextDueDate + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
+}
+
+function formatDueLabel(nextDueDate: string | null): string {
+  const diffDays = getDaysUntilDue(nextDueDate);
+  if (diffDays === null) return "Due date not set";
   if (diffDays < 0) return "Overdue";
   if (diffDays === 0) return "Due today";
   if (diffDays === 1) return "Due tomorrow";
@@ -55,6 +60,18 @@ export default async function DashboardPage() {
     amount: b.amount,
   }));
 
+  const soonestBill = billsResult.data?.[0] ?? null;
+  const soonestDays = soonestBill ? getDaysUntilDue(soonestBill.next_due_date) : null;
+  const dueSoonBill =
+    soonestBill && soonestDays !== null && soonestDays >= 0 && soonestDays <= 1
+      ? {
+          name: soonestBill.name,
+          amount: soonestBill.amount,
+          isToday: soonestDays === 0,
+          canCover: safeToSpend >= soonestBill.amount,
+        }
+      : null;
+
   return (
     <DashboardClient
       firstName={firstName}
@@ -62,6 +79,7 @@ export default async function DashboardPage() {
       safeToSpend={safeToSpend}
       hasAccounts={hasAccounts}
       upcomingBills={upcomingBills}
+      dueSoonBill={dueSoonBill}
       confidence={confidence}
     />
   );

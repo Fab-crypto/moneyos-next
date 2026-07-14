@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, animate, useReducedMotion, type Variants } from "framer-motion";
-import { Calendar, BookOpen, Trophy, CheckCircle2, LineChart, ArrowRight } from "lucide-react";
+import { Calendar, BookOpen, Trophy, CheckCircle2, LineChart, ArrowRight, Bell } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoodBadge } from "@/components/ui/MoodBadge";
@@ -19,12 +19,20 @@ interface UpcomingBill {
   amount: number;
 }
 
+interface DueSoonBill {
+  name: string;
+  amount: number;
+  isToday: boolean;
+  canCover: boolean;
+}
+
 interface DashboardClientProps {
   firstName: string;
   today: string;
   safeToSpend: number;
   hasAccounts: boolean;
   upcomingBills: UpcomingBill[];
+  dueSoonBill: DueSoonBill | null;
   confidence: FinancialConfidenceResult;
 }
 
@@ -36,6 +44,7 @@ export function DashboardClient({
   safeToSpend,
   hasAccounts,
   upcomingBills,
+  dueSoonBill,
   confidence,
 }: DashboardClientProps) {
   const reduceMotion = useReducedMotion();
@@ -67,6 +76,27 @@ export function DashboardClient({
               You saved <span className="text-success">$42</span> more than expected this week.
             </p>
           </motion.section>
+
+          {dueSoonBill && (
+            <motion.div variants={item}>
+              <MoneyCard className="mt-5">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                    <Bell size={14} className="text-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-medium leading-relaxed text-foreground">
+                      {dueSoonBill.name} is due {dueSoonBill.isToday ? "today" : "tomorrow"}
+                      {dueSoonBill.canCover ? " — you're all set to cover it." : "."}
+                    </p>
+                    <p className="mt-1 text-[13px] text-muted-foreground">
+                      ${formatMoney(dueSoonBill.amount)}
+                    </p>
+                  </div>
+                </div>
+              </MoneyCard>
+            </motion.div>
+          )}
 
           <motion.div variants={item} whileTap={reduceMotion ? {} : { scale: 0.985 }}>
             <MoneyCard glow className="mt-8 p-7">
