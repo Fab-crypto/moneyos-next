@@ -27,7 +27,7 @@ export function Toggle({ checked, onChange, disabled = false, label }: TogglePro
         transition={{ type: "spring", stiffness: 500, damping: 32 }}
         className="absolute top-0.5 h-6 w-6 rounded-full bg-white"
         style={{
-          boxShadow: "0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.24), 0 0 0 0.5px rgba(0,0,0,0.06)",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.25), 0 0 0 0.5px rgba(0,0,0,0.08)",
         }}
       />
     </button>
