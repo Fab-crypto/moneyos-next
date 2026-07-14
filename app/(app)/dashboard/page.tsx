@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatWeekdayDate } from "@/lib/date";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
+import { getOrCreateWeeklyReview, getOrCreateMonthlyStory } from "@/lib/reviews";
 import { DashboardClient } from "./DashboardClient";
 
 function getDaysUntilDue(nextDueDate: string | null): number | null {
@@ -72,6 +73,9 @@ export default async function DashboardPage() {
         }
       : null;
 
+  const monthlyStory = await getOrCreateMonthlyStory(supabase, user.id);
+  const weeklyReview = monthlyStory ? null : await getOrCreateWeeklyReview(supabase, user.id);
+
   return (
     <DashboardClient
       firstName={firstName}
@@ -80,6 +84,8 @@ export default async function DashboardPage() {
       hasAccounts={hasAccounts}
       upcomingBills={upcomingBills}
       dueSoonBill={dueSoonBill}
+      monthlyStory={monthlyStory}
+      weeklyReview={weeklyReview}
       confidence={confidence}
     />
   );

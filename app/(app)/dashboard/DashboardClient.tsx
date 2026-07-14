@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, animate, useReducedMotion, type Variants } from "framer-motion";
-import { Calendar, BookOpen, Trophy, CheckCircle2, LineChart, ArrowRight, Bell } from "lucide-react";
+import { Calendar, BookOpen, Trophy, CheckCircle2, LineChart, ArrowRight, Bell, X, Sparkles } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoodBadge } from "@/components/ui/MoodBadge";
@@ -11,6 +11,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { formatMoney, getConfidenceLabel } from "@/lib/formatters";
 import type { FinancialConfidenceResult } from "@/lib/financial-confidence";
+import type { ReviewSnapshot, WeeklyReviewData, MonthlyStoryData } from "@/lib/reviews";
 
 interface UpcomingBill {
   id: string;
@@ -33,6 +34,8 @@ interface DashboardClientProps {
   hasAccounts: boolean;
   upcomingBills: UpcomingBill[];
   dueSoonBill: DueSoonBill | null;
+  monthlyStory: ReviewSnapshot<MonthlyStoryData> | null;
+  weeklyReview: ReviewSnapshot<WeeklyReviewData> | null;
   confidence: FinancialConfidenceResult;
 }
 
@@ -45,9 +48,29 @@ export function DashboardClient({
   hasAccounts,
   upcomingBills,
   dueSoonBill,
+  monthlyStory,
+  weeklyReview,
   confidence,
 }: DashboardClientProps) {
   const reduceMotion = useReducedMotion();
+  const [reviewDismissed, setReviewDismissed] = useState(false);
+
+  async function handleDismissReview(id: string) {
+    setReviewDismissed(true);
+    try {
+      const response = await fetch("/api/reviews/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) {
+        setReviewDismissed(false);
+      }
+    } catch (err) {
+      console.error("[dashboard] review dismiss failed:", err);
+      setReviewDismissed(false);
+    }
+  }
 
   const pageContainer: Variants = {
     hidden: {},
@@ -94,6 +117,71 @@ export function DashboardClient({
                     </p>
                   </div>
                 </div>
+              </MoneyCard>
+            </motion.div>
+          )}
+
+          {!reviewDismissed && (monthlyStory || weeklyReview) && (
+            <motion.div variants={item}>
+              <MoneyCard className="mt-5">
+                <div className="flex items-start justify-between gap-3">
+                  <SectionHeader icon={Sparkles} iconClassName="gold-text">
+                    {monthlyStory ? "Your Month in Review" : "Your Week in Review"}
+                  </SectionHeader>
+                  <button
+                    type="button"
+                    onClick={() => handleDismissReview((monthlyStory ?? weeklyReview)!.id)}
+                    aria-label="Dismiss"
+                    className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors [@media(hover:hover)]:hover:text-foreground"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {monthlyStory ? (
+                  <>
+                    <p className="mt-3 text-[15px] leading-relaxed text-foreground/90">
+                      {monthlyStory.data.narrative}
+                    </p>
+                    {monthlyStory.data.topCategories.length > 0 && (
+                      <div className="mt-4 space-y-2 border-t border-border/50 pt-4">
+                        {monthlyStory.data.topCategories.map((cat) => (
+                          <div key={cat.name} className="flex items-center justify-between text-[14px]">
+                            <span className="text-muted-foreground">{cat.name}</span>
+                            <span className="tabular font-medium text-foreground/90">
+                              ${formatMoney(cat.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {monthlyStory.data.biggestPurchase && (
+                      <p className="mt-3 text-[13px] text-muted-foreground">
+                        Biggest purchase: {monthlyStory.data.biggestPurchase.merchant} — $
+                        {formatMoney(monthlyStory.data.biggestPurchase.amount)}
+                      </p>
+                    )}
+                    {!monthlyStory.data.hasRealBudget && (
+                      <p className="mt-3 text-[12px] text-muted-foreground/70">
+                        Add your monthly income in Profile for a more personalized story.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  weeklyReview && (
+                    <>
+                      <p className="mt-3 text-[15px] leading-relaxed text-foreground/90">
+                        You spent ${formatMoney(weeklyReview.data.totalSpent)} last week. {weeklyReview.data.insight}
+                      </p>
+                      {weeklyReview.data.topCategory && (
+                        <p className="mt-3 text-[13px] text-muted-foreground">
+                          Top category: {weeklyReview.data.topCategory} — $
+                          {formatMoney(weeklyReview.data.topCategoryAmount)}
+                        </p>
+                      )}
+                    </>
+                  )
+                )}
               </MoneyCard>
             </motion.div>
           )}
