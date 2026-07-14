@@ -9,7 +9,11 @@ interface MoneyCardProps {
 
 export function MoneyCard({ children, glow = false, padded = true, className = "" }: MoneyCardProps) {
   return (
-    <div className={`card-premium ${glow ? "hero-glow" : ""} ${padded ? "p-6" : ""} ${className}`}>
+    <div
+      className={`card-premium box-border w-full overflow-hidden ${glow ? "hero-glow" : ""} ${
+        padded ? "p-6" : ""
+      } ${className}`}
+    >
       {children}
     </div>
   );

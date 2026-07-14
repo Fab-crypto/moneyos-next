@@ -344,10 +344,10 @@ function ToggleRow({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between px-6 py-4">
-      <div className="flex items-center gap-3">
-        <Icon size={16} className="text-muted-foreground" />
-        <span className="text-sm text-foreground">{label}</span>
+    <div className="box-border flex w-full items-center justify-between gap-3 px-6 py-4">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <Icon size={16} className="shrink-0 text-muted-foreground" />
+        <span className="truncate text-sm text-foreground">{label}</span>
       </div>
       <Toggle checked={checked} onChange={() => onChange(!checked)} disabled={disabled} label={label} />
     </div>
