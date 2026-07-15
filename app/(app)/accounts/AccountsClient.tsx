@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion, type Variants } from "framer-motion";
-import { Loader2, Wallet, ChevronDown, Plus, Trash2, PiggyBank, TrendingUp, CreditCard } from "lucide-react";
+import { Loader2, Wallet, ChevronDown, Plus, Trash2, PiggyBank, TrendingUp, CreditCard, ArrowRight } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoodBadge } from "@/components/ui/MoodBadge";
@@ -127,6 +128,25 @@ export function AccountsClient({
                   investments={investments}
                   debt={debt}
                 />
+              </motion.div>
+
+              <motion.div variants={item}>
+                <Link href="/loans" className="block">
+                  <MoneyCard className="mt-5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                        <CreditCard size={15} className="text-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] font-medium text-foreground">Loans</p>
+                        <p className="mt-0.5 text-[13px] text-muted-foreground">
+                          Credit cards, mortgages, and student loans
+                        </p>
+                      </div>
+                      <ArrowRight size={16} className="shrink-0 text-muted-foreground" />
+                    </div>
+                  </MoneyCard>
+                </Link>
               </motion.div>
 
               <div className="mt-8 space-y-3">

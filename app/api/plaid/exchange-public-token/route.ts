@@ -213,20 +213,7 @@ export async function POST(request: Request) {
       `[plaid/exchange] success: user=${user.id} institution=${institutionId} accounts=${accountRows.length}`
     );
 
-    // TEMPORARY Phase 0 spike — log the raw Liabilities response so we
-    // can see the real data shape before designing the Loans schema.
-    // Non-fatal: most connections won't have loan/mortgage/student debt
-    // accounts, and that's fine — we're just looking, not saving yet.
-    // Remove this block once the schema is designed.
-    try {
-      const liabilitiesResponse = await plaidClient.liabilitiesGet({ access_token: accessToken });
-      console.log(
-        `[plaid/exchange][LIABILITIES SPIKE] user=${user.id} raw response:`,
-        JSON.stringify(liabilitiesResponse.data, null, 2)
-      );
-    } catch (err) {
-      console.log(`[plaid/exchange][LIABILITIES SPIKE] user=${user.id} liabilitiesGet failed (expected if no loan accounts):`, err);
-    }
+    
 
     let transactionsSynced = 0;
     try {
