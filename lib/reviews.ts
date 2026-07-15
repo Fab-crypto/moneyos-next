@@ -30,12 +30,23 @@ function getLastCompletedMonthRange(): { start: string; end: string } {
   return { start: toISODate(firstOfLastMonth), end: toISODate(lastDayOfLastMonth) };
 }
 
+export interface GoalProgress {
+  name: string;
+  currentAmount: number;
+  targetAmount: number;
+  progressPct: number;
+}
+
 export interface WeeklyReviewData {
-  totalSpent: number;
-  previousWeekTotal: number;
-  topCategory: string | null;
-  topCategoryAmount: number;
-  insight: string;
+  earned: number;
+  spent: number;
+  moneySaved: number;
+  largestExpense: { merchant: string; amount: number } | null;
+  bestCategory: { name: string; amount: number } | null;
+  safeToSpendTrend: { start: number; end: number };
+  confidenceTrend: { start: number; end: number };
+  goals: GoalProgress[];
+  oneThingToTry: string;
 }
 
 export interface MonthlyStoryData {
@@ -76,50 +87,83 @@ export async function getOrCreateWeeklyReview(
 
   const priorStart = toISODate(new Date(new Date(start + "T00:00:00").getTime() - 7 * 86_400_000));
 
-  const { data: txs } = await supabase
-    .from("transactions")
-    .select("amount, category, date")
-    .eq("user_id", userId)
-    .eq("is_removed", false)
-    .eq("type", "expense")
-    .gte("date", priorStart)
-    .lte("date", end);
+  const [txResult, snapshotsResult, goalsResult] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("amount, category, merchant_name, name, date, type")
+      .eq("user_id", userId)
+      .eq("is_removed", false)
+      .gte("date", priorStart)
+      .lte("date", end),
+    supabase
+      .from("financial_confidence_snapshots")
+      .select("snapshot_date, score, safe_to_spend")
+      .eq("user_id", userId)
+      .gte("snapshot_date", start)
+      .lte("snapshot_date", end)
+      .order("snapshot_date", { ascending: true }),
+    supabase.from("goals").select("name, current_amount, target_amount").eq("user_id", userId),
+  ]);
 
-  const thisWeekTx = (txs ?? []).filter((t) => t.date >= start && t.date <= end);
-  const lastWeekTx = (txs ?? []).filter((t) => t.date >= priorStart && t.date < start);
+  const allTx = txResult.data ?? [];
+  const thisWeekExpenses = allTx.filter((t) => t.date >= start && t.date <= end && t.type === "expense");
+  const thisWeekIncome = allTx.filter((t) => t.date >= start && t.date <= end && t.type === "income");
 
-  if (thisWeekTx.length === 0) return null;
+  if (thisWeekExpenses.length === 0 && thisWeekIncome.length === 0) return null;
 
-  const totalSpent = thisWeekTx.reduce((s, t) => s + Math.abs(t.amount), 0);
-  const previousWeekTotal = lastWeekTx.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const spent = thisWeekExpenses.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const earned = thisWeekIncome.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const moneySaved = earned - spent;
+
+  const largest = thisWeekExpenses.length > 0 ? thisWeekExpenses.reduce((max, t) => (Math.abs(t.amount) > Math.abs(max.amount) ? t : max)) : null;
+  const largestExpense = largest ? { merchant: largest.merchant_name || largest.name, amount: Math.abs(largest.amount) } : null;
 
   const byCategory = new Map<string, number>();
-  for (const t of thisWeekTx) {
+  for (const t of thisWeekExpenses) {
     const cat = (t.category ?? "other").toLowerCase();
     byCategory.set(cat, (byCategory.get(cat) ?? 0) + Math.abs(t.amount));
   }
   const topEntry = [...byCategory.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+  const bestCategory = topEntry ? { name: topEntry[0].charAt(0).toUpperCase() + topEntry[0].slice(1), amount: topEntry[1] } : null;
 
-  let insight: string;
-  if (previousWeekTotal > 0) {
-    const change = totalSpent - previousWeekTotal;
-    const pct = Math.round((Math.abs(change) / previousWeekTotal) * 100);
-    insight =
-      change > 0
-        ? `Spending was ${pct}% higher than the week before.`
-        : change < 0
-          ? `Spending was ${pct}% lower than the week before.`
-          : "Spending held steady compared to the week before.";
+  const snapshots = snapshotsResult.data ?? [];
+  const safeToSpendTrend = {
+    start: snapshots[0]?.safe_to_spend ?? 0,
+    end: snapshots[snapshots.length - 1]?.safe_to_spend ?? snapshots[0]?.safe_to_spend ?? 0,
+  };
+  const confidenceTrend = {
+    start: snapshots[0]?.score ?? 0,
+    end: snapshots[snapshots.length - 1]?.score ?? snapshots[0]?.score ?? 0,
+  };
+
+  const goals: GoalProgress[] = (goalsResult.data ?? []).map((g) => ({
+    name: g.name,
+    currentAmount: g.current_amount,
+    targetAmount: g.target_amount,
+    progressPct: g.target_amount > 0 ? Math.min(100, Math.round((g.current_amount / g.target_amount) * 100)) : 0,
+  }));
+
+  let oneThingToTry: string;
+  if (moneySaved < 0 && bestCategory) {
+    oneThingToTry = `You spent more than you earned this week — ${bestCategory.name.toLowerCase()} was the biggest piece of it, worth a look before next week.`;
+  } else if (moneySaved < 0) {
+    oneThingToTry = "You spent more than you earned this week — worth a look before next week.";
+  } else if (bestCategory) {
+    oneThingToTry = `${bestCategory.name} was where most of your spending went this week — nothing urgent, just worth noticing.`;
   } else {
-    insight = "This is your first full week of spending history.";
+    oneThingToTry = "A steady week — nothing here needs your attention.";
   }
 
   const reviewData: WeeklyReviewData = {
-    totalSpent,
-    previousWeekTotal,
-    topCategory: topEntry ? topEntry[0].charAt(0).toUpperCase() + topEntry[0].slice(1) : null,
-    topCategoryAmount: topEntry ? topEntry[1] : 0,
-    insight,
+    earned,
+    spent,
+    moneySaved,
+    largestExpense,
+    bestCategory,
+    safeToSpendTrend,
+    confidenceTrend,
+    goals,
+    oneThingToTry,
   };
 
   const { data: inserted, error } = await supabase

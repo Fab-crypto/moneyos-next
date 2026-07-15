@@ -8,10 +8,18 @@ import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoodBadge } from "@/components/ui/MoodBadge";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { WeeklyReviewModal } from "./WeeklyReviewModal";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { formatMoney, getConfidenceLabel } from "@/lib/formatters";
 import type { FinancialConfidenceResult } from "@/lib/financial-confidence";
 import type { ReviewSnapshot, WeeklyReviewData, MonthlyStoryData } from "@/lib/reviews";
+
+function formatReviewDateRange(start: string, end: string): string {
+  const s = new Date(start + "T00:00:00");
+  const e = new Date(end + "T00:00:00");
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${fmt(s)} – ${fmt(e)}, ${e.getFullYear()}`;
+}
 
 interface UpcomingBill {
   id: string;
@@ -54,6 +62,7 @@ export function DashboardClient({
 }: DashboardClientProps) {
   const reduceMotion = useReducedMotion();
   const [reviewDismissed, setReviewDismissed] = useState(false);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
 
   async function handleDismissReview(id: string) {
     setReviewDismissed(true);
@@ -121,68 +130,66 @@ export function DashboardClient({
             </motion.div>
           )}
 
-          {!reviewDismissed && (monthlyStory || weeklyReview) && (
+          {!reviewDismissed && monthlyStory && (
             <motion.div variants={item}>
               <MoneyCard className="mt-5">
                 <div className="flex items-start justify-between gap-3">
                   <SectionHeader icon={Sparkles} iconClassName="gold-text">
-                    {monthlyStory ? "Your Month in Review" : "Your Week in Review"}
+                    Your Month in Review
                   </SectionHeader>
                   <button
                     type="button"
-                    onClick={() => handleDismissReview((monthlyStory ?? weeklyReview)!.id)}
+                    onClick={() => handleDismissReview(monthlyStory.id)}
                     aria-label="Dismiss"
                     className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors [@media(hover:hover)]:hover:text-foreground"
                   >
                     <X size={16} />
                   </button>
                 </div>
-
-                {monthlyStory ? (
-                  <>
-                    <p className="mt-3 text-[15px] leading-relaxed text-foreground/90">
-                      {monthlyStory.data.narrative}
-                    </p>
-                    {monthlyStory.data.topCategories.length > 0 && (
-                      <div className="mt-4 space-y-2 border-t border-border/50 pt-4">
-                        {monthlyStory.data.topCategories.map((cat) => (
-                          <div key={cat.name} className="flex items-center justify-between text-[14px]">
-                            <span className="text-muted-foreground">{cat.name}</span>
-                            <span className="tabular font-medium text-foreground/90">
-                              ${formatMoney(cat.amount)}
-                            </span>
-                          </div>
-                        ))}
+                <p className="mt-3 text-[15px] leading-relaxed text-foreground/90">{monthlyStory.data.narrative}</p>
+                {monthlyStory.data.topCategories.length > 0 && (
+                  <div className="mt-4 space-y-2 border-t border-border/50 pt-4">
+                    {monthlyStory.data.topCategories.map((cat) => (
+                      <div key={cat.name} className="flex items-center justify-between text-[14px]">
+                        <span className="text-muted-foreground">{cat.name}</span>
+                        <span className="tabular font-medium text-foreground/90">${formatMoney(cat.amount)}</span>
                       </div>
-                    )}
-                    {monthlyStory.data.biggestPurchase && (
-                      <p className="mt-3 text-[13px] text-muted-foreground">
-                        Biggest purchase: {monthlyStory.data.biggestPurchase.merchant} — $
-                        {formatMoney(monthlyStory.data.biggestPurchase.amount)}
-                      </p>
-                    )}
-                    {!monthlyStory.data.hasRealBudget && (
-                      <p className="mt-3 text-[12px] text-muted-foreground/70">
-                        Add your monthly income in Profile for a more personalized story.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  weeklyReview && (
-                    <>
-                      <p className="mt-3 text-[15px] leading-relaxed text-foreground/90">
-                        You spent ${formatMoney(weeklyReview.data.totalSpent)} last week. {weeklyReview.data.insight}
-                      </p>
-                      {weeklyReview.data.topCategory && (
-                        <p className="mt-3 text-[13px] text-muted-foreground">
-                          Top category: {weeklyReview.data.topCategory} — $
-                          {formatMoney(weeklyReview.data.topCategoryAmount)}
-                        </p>
-                      )}
-                    </>
-                  )
+                    ))}
+                  </div>
+                )}
+                {monthlyStory.data.biggestPurchase && (
+                  <p className="mt-3 text-[13px] text-muted-foreground">
+                    Biggest purchase: {monthlyStory.data.biggestPurchase.merchant} — $
+                    {formatMoney(monthlyStory.data.biggestPurchase.amount)}
+                  </p>
+                )}
+                {!monthlyStory.data.hasRealBudget && (
+                  <p className="mt-3 text-[12px] text-muted-foreground/70">
+                    Add your monthly income in Profile for a more personalized story.
+                  </p>
                 )}
               </MoneyCard>
+            </motion.div>
+          )}
+
+          {!reviewDismissed && !monthlyStory && weeklyReview && (
+            <motion.div variants={item}>
+              <button type="button" onClick={() => setReviewModalOpen(true)} className="block w-full text-left">
+                <MoneyCard className="mt-5">
+                  <div className="flex items-center gap-3">
+                    <div className="gold-bg flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
+                      <Sparkles size={18} className="gold-text" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] font-medium text-foreground">Your Weekly Review is ready</p>
+                      <p className="mt-0.5 text-[13px] text-muted-foreground">
+                        {formatReviewDateRange(weeklyReview.periodStart, weeklyReview.periodEnd)}
+                      </p>
+                    </div>
+                    <ArrowRight size={16} className="shrink-0 text-muted-foreground" />
+                  </div>
+                </MoneyCard>
+              </button>
             </motion.div>
           )}
 
@@ -307,6 +314,10 @@ export function DashboardClient({
       </div>
 
       <BottomNav />
+
+      {reviewModalOpen && weeklyReview && (
+        <WeeklyReviewModal review={weeklyReview} onClose={() => setReviewModalOpen(false)} />
+      )}
     </div>
   );
 }
