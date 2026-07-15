@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, animate, useReducedMotion, type Variants } from "framer-motion";
-import { Calendar, BookOpen, Trophy, CheckCircle2, LineChart, ArrowRight, Bell, X, Sparkles } from "lucide-react";
+import { Calendar, BookOpen, Trophy, CheckCircle2, LineChart, ArrowRight, Bell, Sparkles } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoodBadge } from "@/components/ui/MoodBadge";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { WeeklyReviewModal } from "./WeeklyReviewModal";
+import { ReviewStory } from "./ReviewStory";
+import { buildMonthlyStorySlides } from "./MonthlyStorySlides";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { formatMoney, getConfidenceLabel } from "@/lib/formatters";
 import type { FinancialConfidenceResult } from "@/lib/financial-confidence";
@@ -63,23 +65,7 @@ export function DashboardClient({
   const reduceMotion = useReducedMotion();
   const [reviewDismissed, setReviewDismissed] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
-
-  async function handleDismissReview(id: string) {
-    setReviewDismissed(true);
-    try {
-      const response = await fetch("/api/reviews/dismiss", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      if (!response.ok) {
-        setReviewDismissed(false);
-      }
-    } catch (err) {
-      console.error("[dashboard] review dismiss failed:", err);
-      setReviewDismissed(false);
-    }
-  }
+  const [monthlyStoryOpen, setMonthlyStoryOpen] = useState(false);
 
   const pageContainer: Variants = {
     hidden: {},
@@ -132,43 +118,22 @@ export function DashboardClient({
 
           {!reviewDismissed && monthlyStory && (
             <motion.div variants={item}>
-              <MoneyCard className="mt-5">
-                <div className="flex items-start justify-between gap-3">
-                  <SectionHeader icon={Sparkles} iconClassName="gold-text">
-                    Your Month in Review
-                  </SectionHeader>
-                  <button
-                    type="button"
-                    onClick={() => handleDismissReview(monthlyStory.id)}
-                    aria-label="Dismiss"
-                    className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors [@media(hover:hover)]:hover:text-foreground"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <p className="mt-3 text-[15px] leading-relaxed text-foreground/90">{monthlyStory.data.narrative}</p>
-                {monthlyStory.data.topCategories.length > 0 && (
-                  <div className="mt-4 space-y-2 border-t border-border/50 pt-4">
-                    {monthlyStory.data.topCategories.map((cat) => (
-                      <div key={cat.name} className="flex items-center justify-between text-[14px]">
-                        <span className="text-muted-foreground">{cat.name}</span>
-                        <span className="tabular font-medium text-foreground/90">${formatMoney(cat.amount)}</span>
-                      </div>
-                    ))}
+              <button type="button" onClick={() => setMonthlyStoryOpen(true)} className="block w-full text-left">
+                <MoneyCard className="mt-5">
+                  <div className="flex items-center gap-3">
+                    <div className="gold-bg flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
+                      <BookOpen size={18} className="gold-text" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] font-medium text-foreground">
+                        Your {monthlyStory.data.monthLabel} Story is ready
+                      </p>
+                      <p className="mt-0.5 text-[13px] text-muted-foreground">Tap to relive the month</p>
+                    </div>
+                    <ArrowRight size={16} className="shrink-0 text-muted-foreground" />
                   </div>
-                )}
-                {monthlyStory.data.biggestPurchase && (
-                  <p className="mt-3 text-[13px] text-muted-foreground">
-                    Biggest purchase: {monthlyStory.data.biggestPurchase.merchant} — $
-                    {formatMoney(monthlyStory.data.biggestPurchase.amount)}
-                  </p>
-                )}
-                {!monthlyStory.data.hasRealBudget && (
-                  <p className="mt-3 text-[12px] text-muted-foreground/70">
-                    Add your monthly income in Profile for a more personalized story.
-                  </p>
-                )}
-              </MoneyCard>
+                </MoneyCard>
+              </button>
             </motion.div>
           )}
 
@@ -316,7 +281,25 @@ export function DashboardClient({
       <BottomNav />
 
       {reviewModalOpen && weeklyReview && (
-        <WeeklyReviewModal review={weeklyReview} onClose={() => setReviewModalOpen(false)} />
+        <WeeklyReviewModal
+          review={weeklyReview}
+          onClose={() => {
+            setReviewModalOpen(false);
+            setReviewDismissed(true);
+          }}
+        />
+      )}
+
+      {monthlyStoryOpen && monthlyStory && (
+        <ReviewStory
+          snapshot={{ id: monthlyStory.id, type: "monthly" }}
+          slides={buildMonthlyStorySlides(monthlyStory.data)}
+          onDismissed={() => {
+            setMonthlyStoryOpen(false);
+            setReviewDismissed(true);
+          }}
+          onClose={() => setMonthlyStoryOpen(false)}
+        />
       )}
     </div>
   );

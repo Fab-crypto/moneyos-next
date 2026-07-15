@@ -50,12 +50,19 @@ export interface WeeklyReviewData {
 }
 
 export interface MonthlyStoryData {
-  totalSpent: number;
+  monthLabel: string;
+  earned: number;
+  spent: number;
+  moneySaved: number;
   hasRealBudget: boolean;
   budget: number | null;
   topCategories: { name: string; amount: number }[];
   biggestPurchase: { merchant: string; amount: number; date: string } | null;
+  confidenceScore: number;
+  goals: GoalProgress[];
+  isFirstMonthTracked: boolean;
   narrative: string;
+  closingLine: string;
 }
 
 export interface ReviewSnapshot<T> {
@@ -202,27 +209,38 @@ export async function getOrCreateMonthlyStory(
     return { id: existing.id, type: "monthly", periodStart: existing.period_start, periodEnd: existing.period_end, data: existing.data };
   }
 
-  const [txResult, profileResult] = await Promise.all([
+  const [txResult, profileResult, snapshotsResult, goalsResult] = await Promise.all([
     supabase
       .from("transactions")
-      .select("amount, category, merchant_name, name, date")
+      .select("amount, category, merchant_name, name, date, type")
       .eq("user_id", userId)
       .eq("is_removed", false)
-      .eq("type", "expense")
       .gte("date", start)
       .lte("date", end),
     supabase.from("profiles").select("monthly_income").eq("id", userId).maybeSingle(),
+    supabase
+      .from("financial_confidence_snapshots")
+      .select("snapshot_date, score")
+      .eq("user_id", userId)
+      .order("snapshot_date", { ascending: true }),
+    supabase.from("goals").select("name, current_amount, target_amount, is_primary").eq("user_id", userId),
   ]);
 
-  const txs = txResult.data ?? [];
-  if (txs.length === 0) return null;
+  const allTx = txResult.data ?? [];
+  const expenses = allTx.filter((t) => t.type === "expense");
+  const income = allTx.filter((t) => t.type === "income");
 
-  const totalSpent = txs.reduce((s, t) => s + Math.abs(t.amount), 0);
+  if (expenses.length === 0 && income.length === 0) return null;
+
+  const spent = expenses.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const earned = income.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const moneySaved = earned - spent;
+
   const hasRealBudget = profileResult.data?.monthly_income != null;
   const budget = profileResult.data?.monthly_income ?? null;
 
   const byCategory = new Map<string, number>();
-  for (const t of txs) {
+  for (const t of expenses) {
     const cat = (t.category ?? "other").toLowerCase();
     byCategory.set(cat, (byCategory.get(cat) ?? 0) + Math.abs(t.amount));
   }
@@ -231,28 +249,54 @@ export async function getOrCreateMonthlyStory(
     .slice(0, 3)
     .map(([name, amount]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), amount }));
 
-  const biggest = txs.reduce((max, t) => (Math.abs(t.amount) > Math.abs(max.amount) ? t : max));
-  const biggestPurchase = {
-    merchant: biggest.merchant_name || biggest.name,
-    amount: Math.abs(biggest.amount),
-    date: biggest.date,
-  };
+  const biggestPurchase =
+    expenses.length > 0
+      ? (() => {
+          const biggest = expenses.reduce((max, t) => (Math.abs(t.amount) > Math.abs(max.amount) ? t : max));
+          return { merchant: biggest.merchant_name || biggest.name, amount: Math.abs(biggest.amount), date: biggest.date };
+        })()
+      : null;
+
+  const allSnapshots = snapshotsResult.data ?? [];
+  const snapshotsInMonth = allSnapshots.filter((s) => s.snapshot_date <= end);
+  const confidenceScore = snapshotsInMonth[snapshotsInMonth.length - 1]?.score ?? 0;
+
+  const isFirstMonthTracked = allSnapshots.length > 0 && allSnapshots.every((s) => s.snapshot_date >= start);
+
+  const goals: GoalProgress[] = (goalsResult.data ?? [])
+    .slice()
+    .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+    .map((g) => ({
+      name: g.name,
+      currentAmount: g.current_amount,
+      targetAmount: g.target_amount,
+      progressPct: g.target_amount > 0 ? Math.min(100, Math.round((g.current_amount / g.target_amount) * 100)) : 0,
+    }));
 
   const monthLabel = new Date(start + "T00:00:00").toLocaleDateString("en-US", { month: "long" });
-  let narrative = `You spent $${totalSpent.toFixed(0)} in ${monthLabel}`;
-  if (topCategories[0]) {
-    narrative += `, with ${topCategories[0].name} as your biggest category.`;
-  } else {
-    narrative += ".";
-  }
+
+  let narrative = `You spent $${spent.toFixed(0)} in ${monthLabel}`;
+  narrative += topCategories[0] ? `, with ${topCategories[0].name} as your biggest category.` : ".";
+
+  const closingLine =
+    moneySaved < 0
+      ? "Not every month is perfect — what matters is the next one."
+      : "A solid month — keep the momentum going into the next one.";
 
   const storyData: MonthlyStoryData = {
-    totalSpent,
+    monthLabel,
+    earned,
+    spent,
+    moneySaved,
     hasRealBudget,
     budget,
     topCategories,
     biggestPurchase,
+    confidenceScore,
+    goals,
+    isFirstMonthTracked,
     narrative,
+    closingLine,
   };
 
   const { data: inserted, error } = await supabase
