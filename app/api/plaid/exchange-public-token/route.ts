@@ -17,15 +17,6 @@ function isExchangeRequestBody(value: unknown): value is ExchangeRequestBody {
 }
 
 export async function POST(request: Request) {
-  // ── Step 1: identify the caller ─────────────────────────────────────
-  // This is the ONLY step that relies on the session-scoped client. Once
-  // we know who the user is, every database write below uses the
-  // service-role client instead — institutions/plaid_items/accounts are
-  // never written to with the session client, which is what was
-  // triggering "new row violates row-level security policy". RLS on
-  // those tables is still fully enforced for any other code path (e.g.
-  // a future client-side read), it's just not the layer doing identity
-  // checks on writes made from this already-authenticated server route.
   const supabase = await createClient();
   const {
     data: { user },
@@ -53,9 +44,6 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
-  // ── Step 2: exchange the public_token for a real access_token ───────
-  // This must succeed independently of anything below — a DB failure
-  // later must never be confused with a Plaid Link failure here.
   let accessToken: string;
   let itemId: string;
   try {
@@ -72,7 +60,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── Step 3: re-fetch accounts from Plaid using the fresh access_token ─
   let plaidAccounts: Awaited<ReturnType<typeof plaidClient.accountsGet>>["data"]["accounts"];
   try {
     const accountsResponse = await plaidClient.accountsGet({ access_token: accessToken });
@@ -85,12 +72,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── Step 4: resolve institution name/logo ────────────────────────────
   const plaidInstitutionId = body.institution?.institution_id ?? null;
   const institutionInfo = plaidInstitutionId ? await getInstitutionInfo(plaidInstitutionId) : null;
   const institutionName = institutionInfo?.name ?? body.institution?.name ?? "Connected Bank";
 
-  // ── Step 5: find-or-create the institution row (service-role client) ─
   let institutionId: string;
   try {
     if (plaidInstitutionId) {
@@ -162,9 +147,6 @@ export async function POST(request: Request) {
       institutionId = newInstitution.id;
     }
   } catch (err) {
-    // Graceful failure: the bank connection itself (Plaid side) already
-    // succeeded — only local bookkeeping failed. Tell the user plainly
-    // rather than surfacing a raw Postgres error.
     console.error("[plaid/exchange] institutions step failed, aborting:", err);
     return NextResponse.json(
       { error: "Connected to your bank, but saving the connection failed. Please try again." },
@@ -172,8 +154,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── Step 6: upsert plaid_items (service-role client, required — this
-  //     table has no client-facing RLS policy at all by design) ────────
   let plaidItemRowId: string;
   try {
     const { data: plaidItem, error: plaidItemError } = await admin
@@ -204,7 +184,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── Step 7: upsert accounts (service-role client) ────────────────────
   try {
     const accountRows = plaidAccounts.map((account) => ({
       user_id: user.id,
@@ -234,12 +213,21 @@ export async function POST(request: Request) {
       `[plaid/exchange] success: user=${user.id} institution=${institutionId} accounts=${accountRows.length}`
     );
 
-    // ── Step 8: sync transaction history for the newly connected item ──
-    // A sync failure here must not turn a successful bank connection
-    // into an error response — the institution and accounts are already
-    // saved. The client still gets accounts_connected back either way;
-    // transactions_synced is best-effort and can be retried later via
-    // /api/plaid/transactions-sync.
+    // TEMPORARY Phase 0 spike — log the raw Liabilities response so we
+    // can see the real data shape before designing the Loans schema.
+    // Non-fatal: most connections won't have loan/mortgage/student debt
+    // accounts, and that's fine — we're just looking, not saving yet.
+    // Remove this block once the schema is designed.
+    try {
+      const liabilitiesResponse = await plaidClient.liabilitiesGet({ access_token: accessToken });
+      console.log(
+        `[plaid/exchange][LIABILITIES SPIKE] user=${user.id} raw response:`,
+        JSON.stringify(liabilitiesResponse.data, null, 2)
+      );
+    } catch (err) {
+      console.log(`[plaid/exchange][LIABILITIES SPIKE] user=${user.id} liabilitiesGet failed (expected if no loan accounts):`, err);
+    }
+
     let transactionsSynced = 0;
     try {
       const result = await syncPlaidItemTransactions(admin, user.id, {
@@ -250,7 +238,6 @@ export async function POST(request: Request) {
       });
       transactionsSynced = result.added;
     } catch (err) {
-      // Already logged inside syncPlaidItemTransactions.
       console.error("[plaid/exchange] initial transaction sync failed (non-fatal):", err);
     }
 

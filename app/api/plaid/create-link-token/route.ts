@@ -19,11 +19,10 @@ export async function POST() {
       webhook: process.env.PLAID_WEBHOOK_URL,
       user: { client_user_id: user.id },
       client_name: "MoneyOS",
-      products: [Products.Transactions],
+      products: [Products.Transactions, Products.Liabilities],
       country_codes: [CountryCode.Us],
       language: "en",
     });
-
     return NextResponse.json({ link_token: response.data.link_token });
   } catch (err) {
     console.error("Plaid create-link-token failed:", err);
