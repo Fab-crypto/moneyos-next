@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { CreditCard, Home, GraduationCap, Sparkle } from "lucide-react";
+import { CreditCard, Home, GraduationCap, Sparkle, TrendingUp, TrendingDown } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -23,6 +23,12 @@ interface Loan {
   lastPaymentAmount: number | null;
   lastPaymentDate: string | null;
   details: Record<string, unknown> | null;
+  payoffDate: string | null;
+  payoffYearsRemaining: number | null;
+  payoffMonths: number | null;
+  totalInterestRemaining: number | null;
+  neverPaysOffAtCurrentPayment: boolean;
+  balanceHistory: { date: string; balance: number }[];
 }
 
 const LOAN_ICON = {
@@ -173,6 +179,42 @@ export function LoansClient({ loans }: LoansClientProps) {
                             </div>
                           )}
                         </div>
+
+                        {(loan.payoffDate || loan.neverPaysOffAtCurrentPayment) && (
+                          <div className="mt-4 space-y-2 border-t border-border/50 pt-4">
+                            {loan.neverPaysOffAtCurrentPayment ? (
+                              <p className="text-[13px] leading-relaxed text-muted-foreground">
+                                At the current minimum payment, this balance won't pay down — the
+                                payment doesn't cover the monthly interest.
+                              </p>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-between text-[13px]">
+                                  <span className="text-muted-foreground">Projected payoff</span>
+                                  <span className="tabular font-medium text-foreground/90">
+                                    {formatDate(loan.payoffDate)}
+                                    {loan.payoffYearsRemaining !== null &&
+                                      ` (${loan.payoffYearsRemaining} yr)`}
+                                  </span>
+                                </div>
+                                {loan.totalInterestRemaining !== null && (
+                                  <div className="flex items-center justify-between text-[13px]">
+                                    <span className="text-muted-foreground">
+                                      Total interest at minimum payment
+                                    </span>
+                                    <span className="tabular font-medium text-foreground/90">
+                                      ${formatMoney(loan.totalInterestRemaining)}
+                                    </span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {loan.balanceHistory.length >= 2 && (
+                          <BalanceTrendRow history={loan.balanceHistory} />
+                        )}
                       </MoneyCard>
                     </motion.div>
                   );
@@ -184,6 +226,26 @@ export function LoansClient({ loans }: LoansClientProps) {
       </div>
 
       <BottomNav />
+    </div>
+  );
+}
+
+function BalanceTrendRow({ history }: { history: { date: string; balance: number }[] }) {
+  const first = history[0].balance;
+  const last = history[history.length - 1].balance;
+  const isDown = last < first;
+  const isUp = last > first;
+  const Icon = isDown ? TrendingDown : isUp ? TrendingUp : null;
+
+  return (
+    <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-4 text-[13px]">
+      <span className="text-muted-foreground">Balance trend</span>
+      <div className={`flex items-center gap-1.5 font-medium ${isDown ? "text-success" : "text-foreground/90"}`}>
+        {Icon && <Icon size={13} />}
+        <span className="tabular">
+          ${formatMoney(first)} → ${formatMoney(last)}
+        </span>
+      </div>
     </div>
   );
 }
