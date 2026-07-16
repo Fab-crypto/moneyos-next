@@ -91,8 +91,8 @@ export function LoansClient({ loans }: LoansClientProps) {
               <motion.div variants={item}>
                 <MoneyCard glow className="mt-6 p-7">
                   <SectionHeader>Total Owed</SectionHeader>
-                  <p className="tabular relative z-10 mt-4 font-heading text-[44px] font-bold leading-none tracking-[-0.02em] text-foreground">
-                    ${formatMoney(totalOwed)}
+                  <p className="tabular relative z-10 mt-4 font-heading text-[44px] font-bold leading-none tracking-[-0.02em] text-danger">
+                    -${formatMoney(totalOwed)}
                   </p>
                   <p className="mt-3 text-[14px] text-muted-foreground">
                     Across {loans.length} {loans.length === 1 ? "account" : "accounts"}
@@ -124,8 +124,8 @@ export function LoansClient({ loans }: LoansClientProps) {
                               {loan.mask ? ` · ····${loan.mask}` : ""}
                             </p>
                           </div>
-                          <p className="tabular shrink-0 text-[17px] font-semibold text-foreground">
-                            ${formatMoney(loan.balance)}
+                          <p className="tabular shrink-0 text-[17px] font-semibold text-danger">
+                            -${formatMoney(loan.balance)}
                           </p>
                         </div>
 
