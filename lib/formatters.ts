@@ -20,6 +20,7 @@ export function formatMoney(amount: number, options: FormatMoneyOptions = {}): s
  * the underlying number is low.
  */
 export function getConfidenceLabel(score: number): string {
+  if (score >= 90) return "Excellent";
   if (score >= 80) return "Strong";
   if (score >= 60) return "Steady";
   if (score >= 40) return "Building";

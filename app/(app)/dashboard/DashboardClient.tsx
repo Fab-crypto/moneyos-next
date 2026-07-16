@@ -11,6 +11,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { WeeklyReviewModal } from "./WeeklyReviewModal";
 import { ReviewStory } from "./ReviewStory";
 import { buildMonthlyStorySlides } from "./MonthlyStorySlides";
+import { DailyGreeting } from "./DailyGreeting";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { formatMoney, getConfidenceLabel } from "@/lib/formatters";
 import type { FinancialConfidenceResult } from "@/lib/financial-confidence";
@@ -37,6 +38,11 @@ interface DueSoonBill {
   canCover: boolean;
 }
 
+interface GoalFocus {
+  name: string;
+  remaining: number;
+}
+
 interface DashboardClientProps {
   firstName: string;
   today: string;
@@ -47,6 +53,9 @@ interface DashboardClientProps {
   monthlyStory: ReviewSnapshot<MonthlyStoryData> | null;
   weeklyReview: ReviewSnapshot<WeeklyReviewData> | null;
   confidence: FinancialConfidenceResult;
+  showGreeting: boolean;
+  goalFocus: GoalFocus | null;
+  monthlySavings: number;
 }
 
 const EMERGENCY_FUND_PCT = 71;
@@ -61,8 +70,12 @@ export function DashboardClient({
   monthlyStory,
   weeklyReview,
   confidence,
+  showGreeting,
+  goalFocus,
+  monthlySavings,
 }: DashboardClientProps) {
   const reduceMotion = useReducedMotion();
+  const [greetingDismissed, setGreetingDismissed] = useState(false);
   const [reviewDismissed, setReviewDismissed] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [monthlyStoryOpen, setMonthlyStoryOpen] = useState(false);
@@ -299,6 +312,17 @@ export function DashboardClient({
             setReviewDismissed(true);
           }}
           onClose={() => setMonthlyStoryOpen(false)}
+        />
+      )}
+
+      {showGreeting && !greetingDismissed && (
+        <DailyGreeting
+          firstName={firstName}
+          confidenceScore={confidence.score}
+          safeToSpend={safeToSpend}
+          goalFocus={goalFocus}
+          monthlySavings={monthlySavings}
+          onDismiss={() => setGreetingDismissed(true)}
         />
       )}
     </div>

@@ -32,8 +32,13 @@ export default async function DashboardPage() {
     redirect("/welcome");
   }
 
-  const [profileResult, accountsResult, billsResult, confidence] = await Promise.all([
-    supabase.from("profiles").select("full_name").eq("id", user.id).single(),
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = new Date();
+  firstOfMonth.setDate(1);
+  const firstOfMonthIso = firstOfMonth.toISOString().slice(0, 10);
+
+  const [profileResult, accountsResult, billsResult, goalResult, monthTxResult, confidence] = await Promise.all([
+    supabase.from("profiles").select("full_name, last_greeting_shown_date").eq("id", user.id).single(),
     supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
     supabase
       .from("recurring_transactions")
@@ -41,6 +46,19 @@ export default async function DashboardPage() {
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
       .limit(3),
+    supabase
+      .from("goals")
+      .select("name, current_amount, target_amount, is_primary")
+      .eq("user_id", user.id)
+      .order("is_primary", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("transactions")
+      .select("amount, type")
+      .eq("user_id", user.id)
+      .eq("is_removed", false)
+      .gte("date", firstOfMonthIso),
     getFinancialConfidence(supabase, user.id),
   ]);
 
@@ -76,6 +94,19 @@ export default async function DashboardPage() {
   const monthlyStory = await getOrCreateMonthlyStory(supabase, user.id);
   const weeklyReview = monthlyStory ? null : await getOrCreateWeeklyReview(supabase, user.id);
 
+  const goal = goalResult.data;
+  const goalFocus =
+    goal && goal.current_amount < goal.target_amount
+      ? { name: goal.name, remaining: goal.target_amount - goal.current_amount }
+      : null;
+
+  const monthTx = monthTxResult.data ?? [];
+  const monthEarned = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + Math.abs(t.amount), 0);
+  const monthSpent = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + Math.abs(t.amount), 0);
+  const monthlySavings = monthEarned - monthSpent;
+
+  const showGreeting = profileResult.data?.last_greeting_shown_date !== todayIso;
+
   return (
     <DashboardClient
       firstName={firstName}
@@ -87,6 +118,9 @@ export default async function DashboardPage() {
       monthlyStory={monthlyStory}
       weeklyReview={weeklyReview}
       confidence={confidence}
+      showGreeting={showGreeting}
+      goalFocus={goalFocus}
+      monthlySavings={monthlySavings}
     />
   );
 }
