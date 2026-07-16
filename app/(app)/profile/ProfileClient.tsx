@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import {
@@ -323,9 +324,9 @@ function SettingsListCard({
         onChange={handleNotificationsChange}
         disabled={saving}
       />
-      <NavRow icon={Shield} label="Privacy & Security" />
+      <NavRow icon={Shield} label="Privacy & Security" href="/profile/security" />
       <SubscriptionRow isSubscribed={isSubscribed} />
-      <NavRow icon={HelpCircle} label="Support" />
+      <NavRow icon={HelpCircle} label="Support" href="mailto:odukfabian@gmail.com" />
     </MoneyCard>
   );
 }
@@ -354,18 +355,32 @@ function ToggleRow({
   );
 }
 
-function NavRow({ icon: Icon, label }: { icon: typeof Shield; label: string }) {
-  return (
-    <button
-      type="button"
-      className="flex w-full items-center justify-between px-6 py-4 transition-colors [@media(hover:hover)]:hover:bg-muted/50"
-    >
+function NavRow({ icon: Icon, label, href }: { icon: typeof Shield; label: string; href: string }) {
+  const content = (
+    <>
       <div className="flex items-center gap-3">
         <Icon size={16} className="text-muted-foreground" />
         <span className="text-sm text-foreground">{label}</span>
       </div>
       <ChevronRight size={14} className="text-muted-foreground" />
-    </button>
+    </>
+  );
+
+  const className =
+    "flex w-full items-center justify-between px-6 py-4 transition-colors [@media(hover:hover)]:hover:bg-muted/50";
+
+  if (href.startsWith("mailto:")) {
+    return (
+      <a href={href} className={className}>
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href} className={className}>
+      {content}
+    </Link>
   );
 }
 
