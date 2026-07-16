@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   const errorUrl = new URL("/auth/login", requestUrl.origin);
-  errorUrl.searchParams.set("error", "Google sign-in failed. Please try again.");
+  errorUrl.searchParams.set("error", "Sign-in failed. Please try again.");
 
   return NextResponse.redirect(errorUrl);
 }
