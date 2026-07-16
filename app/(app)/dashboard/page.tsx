@@ -1,26 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { formatWeekdayDate } from "@/lib/date";
+import { formatWeekdayDate, getDaysUntilDue, formatDueLabel } from "@/lib/date";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
 import { getOrCreateWeeklyReview, getOrCreateMonthlyStory } from "@/lib/reviews";
 import { DashboardClient } from "./DashboardClient";
-
-function getDaysUntilDue(nextDueDate: string | null): number | null {
-  if (!nextDueDate) return null;
-  const due = new Date(nextDueDate + "T00:00:00");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
-}
-
-function formatDueLabel(nextDueDate: string | null): string {
-  const diffDays = getDaysUntilDue(nextDueDate);
-  if (diffDays === null) return "Due date not set";
-  if (diffDays < 0) return "Overdue";
-  if (diffDays === 0) return "Due today";
-  if (diffDays === 1) return "Due tomorrow";
-  return `Due in ${diffDays} days`;
-}
 
 export default async function DashboardPage() {
   const supabase = await createClient();

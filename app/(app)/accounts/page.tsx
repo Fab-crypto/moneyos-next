@@ -1,18 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AccountsClient } from "./AccountsClient";
-
-function formatDueLabel(nextDueDate: string | null): string {
-  if (!nextDueDate) return "Due date not set";
-  const due = new Date(nextDueDate + "T00:00:00");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((due.getTime() - today.getTime()) / 86_400_000);
-  if (diffDays < 0) return "Overdue";
-  if (diffDays === 0) return "Due today";
-  if (diffDays === 1) return "Due tomorrow";
-  return `Due in ${diffDays} days`;
-}
+import { formatDueLabel } from "@/lib/date";
 
 export default async function AccountsPage() {
   const supabase = await createClient();
