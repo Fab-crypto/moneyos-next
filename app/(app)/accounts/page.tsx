@@ -25,10 +25,10 @@ export default async function AccountsPage() {
   }
 
   const [institutionsResult, accountsResult, billsResult] = await Promise.all([
-    supabase.from("institutions").select("id, name, status, last_synced_at"),
+    supabase.from("institutions").select("id, name, status, last_synced_at, logo_url"),
     supabase
       .from("accounts")
-      .select("id, name, current_balance, type, subtype, institution_id")
+      .select("id, name, current_balance, type, subtype,institution_id")
       .eq("is_active", true),
     supabase
       .from("recurring_transactions")
@@ -48,6 +48,7 @@ export default async function AccountsPage() {
   let savings = 0;
   let investments = 0;
   let debt = 0;
+
   for (const a of rawAccounts) {
     const balance = a.current_balance ?? 0;
     if (a.type === "depository" && a.subtype === "checking") {
@@ -70,12 +71,12 @@ export default async function AccountsPage() {
           name: a.name,
           balance: signedBalance(a.type, a.current_balance ?? 0),
         }));
-
       return {
         id: inst.id,
         name: inst.name,
         status: inst.status,
         lastSyncedAt: inst.last_synced_at,
+        logoUrl: inst.logo_url,
         accounts: accountsForInst,
       };
     })

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion, type Variants } from "framer-motion";
-import { Loader2, Wallet, ChevronDown, Plus, Trash2, PiggyBank, TrendingUp, CreditCard, ArrowRight } from "lucide-react";
+import { Loader2, Wallet, ChevronDown, Plus, Trash2, PiggyBank, TrendingUp, CreditCard, ArrowRight, Building2 } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoodBadge } from "@/components/ui/MoodBadge";
@@ -25,6 +25,7 @@ interface Institution {
   name: string;
   status: string;
   lastSyncedAt: string | null;
+  logoUrl: string | null;
   accounts: AccountRow[];
 }
 
@@ -274,6 +275,7 @@ function InstitutionCard({ institution, onDisconnected }: { institution: Institu
   const [expanded, setExpanded] = useState(false);
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
   const total = institution.accounts.reduce((sum, a) => sum + a.balance, 0);
   const isNegative = total < 0;
   const isHealthySync = institution.status === "connected";
@@ -304,9 +306,23 @@ function InstitutionCard({ institution, onDisconnected }: { institution: Institu
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
-        className="flex w-full items-center justify-between gap-3 p-6 text-left"
+        className="flex w-full items-center gap-3 p-6 text-left"
       >
-        <div className="min-w-0">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+          {institution.logoUrl && !logoFailed ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={institution.logoUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={() => setLogoFailed(true)}
+            />
+          ) : (
+            <Building2 size={18} className="text-foreground" />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
           <SectionHeader>{institution.name}</SectionHeader>
           <p
             className={`tabular mt-2 font-heading text-2xl font-bold tracking-tight ${
@@ -322,6 +338,7 @@ function InstitutionCard({ institution, onDisconnected }: { institution: Institu
             </span>
           </div>
         </div>
+
         <motion.div
           animate={{ rotate: expanded ? 180 : 0 }}
           transition={{ duration: 0.2 }}
