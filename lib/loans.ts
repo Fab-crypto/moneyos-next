@@ -118,3 +118,84 @@ export async function syncLoanDetails(
     console.error(`[loans] failed to upsert loan details for user=${userId}:`, error);
   }
 }
+
+export async function recordLoanBalanceSnapshots(
+  admin: SupabaseClient<any, "public", any>,
+  userId: string
+): Promise<void> {
+  const { data: loanAccountRows } = await admin
+    .from("loan_details")
+    .select("account_id")
+    .eq("user_id", userId);
+
+  if (!loanAccountRows || loanAccountRows.length === 0) return;
+
+  const accountIds = loanAccountRows.map((r) => r.account_id);
+
+  const { data: accounts } = await admin
+    .from("accounts")
+    .select("id, current_balance")
+    .in("id", accountIds);
+
+  if (!accounts || accounts.length === 0) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = accounts.map((a) => ({
+    user_id: userId,
+    account_id: a.id,
+    balance: a.current_balance ?? 0,
+    snapshot_date: today,
+  }));
+
+  const { error } = await admin
+    .from("loan_balance_snapshots")
+    .upsert(rows, { onConflict: "account_id,snapshot_date" });
+
+  if (error) {
+    console.error(`[loans] failed to record balance snapshots for user=${userId}:`, error);
+  }
+}
+
+export interface PayoffProjection {
+  monthsToPayoff: number | null;
+  payoffDate: string | null;
+  totalInterest: number | null;
+}
+
+export function computeCreditPayoffProjection(
+  balance: number,
+  annualInterestRatePercent: number,
+  minimumPayment: number
+): PayoffProjection {
+  if (balance <= 0 || minimumPayment <= 0) {
+    return { monthsToPayoff: 0, payoffDate: new Date().toISOString().slice(0, 10), totalInterest: 0 };
+  }
+
+  const monthlyRate = annualInterestRatePercent / 100 / 12;
+
+  if (monthlyRate === 0) {
+    const months = Math.ceil(balance / minimumPayment);
+    const payoffDate = new Date();
+    payoffDate.setMonth(payoffDate.getMonth() + months);
+    return { monthsToPayoff: months, payoffDate: payoffDate.toISOString().slice(0, 10), totalInterest: 0 };
+  }
+
+  const monthlyInterestCharge = balance * monthlyRate;
+  if (minimumPayment <= monthlyInterestCharge) {
+    return { monthsToPayoff: null, payoffDate: null, totalInterest: null };
+  }
+
+  const months = -Math.log(1 - (balance * monthlyRate) / minimumPayment) / Math.log(1 + monthlyRate);
+  const roundedMonths = Math.ceil(months);
+  const totalPaid = minimumPayment * roundedMonths;
+  const totalInterest = totalPaid - balance;
+
+  const payoffDate = new Date();
+  payoffDate.setMonth(payoffDate.getMonth() + roundedMonths);
+
+  return {
+    monthsToPayoff: roundedMonths,
+    payoffDate: payoffDate.toISOString().slice(0, 10),
+    totalInterest,
+  };
+}

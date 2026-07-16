@@ -2,7 +2,7 @@ import "server-only";
 import { plaidClient } from "@/lib/plaid";
 import { decryptToken } from "@/lib/crypto";
 import { refreshRecurringBills } from "@/lib/recurring";
-import { syncLoanDetails } from "@/lib/loans";
+import { syncLoanDetails, recordLoanBalanceSnapshots } from "@/lib/loans";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 interface PlaidItemRow {
@@ -144,6 +144,12 @@ export async function syncPlaidItemTransactions(
       await syncLoanDetails(admin, userId, accessToken, accountIdByPlaidId);
     } catch (loanErr) {
       console.error(`[plaid-sync] item=${item.plaid_item_id} loan details sync failed (non-fatal):`, loanErr);
+    }
+
+    try {
+      await recordLoanBalanceSnapshots(admin, userId);
+    } catch (snapshotErr) {
+      console.error(`[plaid-sync] item=${item.plaid_item_id} loan balance snapshot failed (non-fatal):`, snapshotErr);
     }
 
     try {
