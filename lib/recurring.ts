@@ -10,6 +10,7 @@ interface TxInput {
   date: string;
   account_id: string;
   type: string;
+  category: string | null;
 }
 
 export interface RecurringBillResult {
@@ -18,6 +19,7 @@ export interface RecurringBillResult {
   amount: number;
   frequency: "weekly" | "biweekly" | "monthly";
   nextDueDate: string;
+  category: string | null;
 }
 
 function normalizeMerchant(description: string): string {
@@ -96,6 +98,7 @@ export function detectRecurringBills(transactions: TxInput[]): RecurringBillResu
       amount: avgAmount,
       frequency: cadence.name,
       nextDueDate,
+      category: last.category,
     });
   }
 
@@ -110,7 +113,7 @@ export async function refreshRecurringBills(
 
   const { data: transactions, error: txError } = await admin
     .from("transactions")
-    .select("merchant_name, name, amount, date, account_id, type")
+    .select("merchant_name, name, amount, date, account_id, type, category")
     .eq("user_id", userId)
     .eq("is_removed", false)
     .gte("date", windowStart);
@@ -122,16 +125,46 @@ export async function refreshRecurringBills(
 
   const detected = detectRecurringBills(transactions ?? []);
 
-  if (detected.length > 0) {
-    const rows = detected.map((bill) => ({
-      user_id: userId,
-      account_id: bill.accountId,
-      name: bill.name,
-      amount: bill.amount,
-      frequency: bill.frequency,
-      next_due_date: bill.nextDueDate,
-      is_active: true,
-    }));
+  const { data: manualOverrides, error: manualError } = await admin
+    .from("recurring_transactions")
+    .select("name, account_id")
+    .eq("user_id", userId)
+    .eq("source", "manual");
+
+  if (manualError) {
+    console.error(`[recurring] failed to fetch manual overrides for user=${userId}:`, manualError);
+    return;
+  }
+
+  const manualKeys = new Set((manualOverrides ?? []).map((m) => `${m.name}|${m.account_id}`));
+  const autoDetected = detected.filter((b) => !manualKeys.has(`${b.name}|${b.accountId}`));
+
+  const { data: existingDetected } = await admin
+    .from("recurring_transactions")
+    .select("id, name, account_id, amount")
+    .eq("user_id", userId)
+    .eq("source", "detected");
+
+  const existingByKey = new Map(
+    (existingDetected ?? []).map((r) => [`${r.name}|${r.account_id}`, { id: r.id, amount: r.amount }])
+  );
+
+  if (autoDetected.length > 0) {
+    const rows = autoDetected.map((bill) => {
+      const key = `${bill.name}|${bill.accountId}`;
+      const isNew = !existingByKey.has(key);
+      return {
+        user_id: userId,
+        account_id: bill.accountId,
+        name: bill.name,
+        amount: bill.amount,
+        frequency: bill.frequency,
+        next_due_date: bill.nextDueDate,
+        category: bill.category,
+        is_active: true,
+        ...(isNew ? { review_status: "pending" as const } : {}),
+      };
+    });
 
     const { error: upsertError } = await admin
       .from("recurring_transactions")
@@ -141,9 +174,51 @@ export async function refreshRecurringBills(
       console.error(`[recurring] failed to upsert detected bills for user=${userId}:`, upsertError);
       return;
     }
+
+    const historyRows = autoDetected
+      .map((bill) => {
+        const key = `${bill.name}|${bill.accountId}`;
+        const existing = existingByKey.get(key);
+        const isNew = !existing;
+        const amountChanged = existing && Math.abs(existing.amount - bill.amount) > 0.005;
+        if (!isNew && !amountChanged) return null;
+        return { name: bill.name, accountId: bill.accountId, amount: bill.amount };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    if (historyRows.length > 0) {
+      const { data: freshRows } = await admin
+        .from("recurring_transactions")
+        .select("id, name, account_id")
+        .eq("user_id", userId)
+        .in(
+          "name",
+          historyRows.map((r) => r.name)
+        );
+
+      const idByKey = new Map((freshRows ?? []).map((r) => [`${r.name}|${r.account_id}`, r.id]));
+
+      const priceHistoryInserts = historyRows
+        .map((r) => {
+          const id = idByKey.get(`${r.name}|${r.accountId}`);
+          if (!id) return null;
+          return { recurring_transaction_id: id, user_id: userId, amount: r.amount };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      if (priceHistoryInserts.length > 0) {
+        const { error: historyError } = await admin
+          .from("subscription_price_history")
+          .insert(priceHistoryInserts);
+
+        if (historyError) {
+          console.error(`[recurring] failed to record price history for user=${userId}:`, historyError);
+        }
+      }
+    }
   }
 
-  const detectedKeys = new Set(detected.map((b) => `${b.name}|${b.accountId}`));
+  const detectedKeys = new Set(autoDetected.map((b) => `${b.name}|${b.accountId}`));
 
   const { data: existingActive, error: existingError } = await admin
     .from("recurring_transactions")
@@ -171,5 +246,7 @@ export async function refreshRecurringBills(
     }
   }
 
-  console.log(`[recurring] user=${userId} detected ${detected.length} recurring bill(s)`);
+  console.log(
+    `[recurring] user=${userId} detected ${detected.length} pattern(s), ${autoDetected.length} auto-managed (${manualKeys.size} excluded as manually-touched)`
+  );
 }
