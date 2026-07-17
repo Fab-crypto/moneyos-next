@@ -83,6 +83,10 @@ export function AccountsClient({
     router.refresh();
   }
 
+  function handleFirstBankConnected() {
+    window.location.reload();
+  }
+
   const pageContainer: Variants = {
     hidden: {},
     show: { transition: { staggerChildren: reduceMotion ? 0 : 0.08 } },
@@ -115,7 +119,7 @@ export function AccountsClient({
                 icon={Wallet}
                 title="No accounts connected yet"
                 description="Once you connect a bank, your accounts will show up here."
-                action={<ConnectBank onConnected={refresh} />}
+                action={<ConnectBank onConnected={handleFirstBankConnected} />}
               />
             </motion.div>
           ) : (
@@ -205,8 +209,8 @@ function ConnectAnotherBankRow({ onConnected }: { onConnected: () => void }) {
   const [open, setOpen] = useState(false);
 
   function handleConnected() {
-    setOpen(false);
     onConnected();
+    window.location.reload();
   }
 
   if (open) {
