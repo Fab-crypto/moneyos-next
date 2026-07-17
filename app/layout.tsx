@@ -36,9 +36,16 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const isProduction = process.env.VERCEL_ENV === "production";
+
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable} ${plexMono.variable}`}>
       <body>
+        {!isProduction && (
+          <div className="fixed inset-x-0 top-0 z-[999] bg-amber-500 py-1 text-center text-[11px] font-bold uppercase tracking-wider text-black">
+            Staging — not the live app
+          </div>
+        )}
         {children}
         <Analytics />
         <SpeedInsights />
