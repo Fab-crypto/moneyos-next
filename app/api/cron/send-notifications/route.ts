@@ -32,6 +32,8 @@ export async function GET(request: Request) {
   let cleaned = 0;
 
   for (const profile of profiles ?? []) {
+    const notifications: { title: string; body: string; url: string }[] = [];
+
     const { data: bills } = await admin
       .from("recurring_transactions")
       .select("name, amount, next_due_date")
@@ -41,10 +43,37 @@ export async function GET(request: Request) {
       .limit(1);
 
     const soonest = bills?.[0];
-    if (!soonest) continue;
+    const daysUntilDue = soonest ? getDaysUntilDue(soonest.next_due_date) : null;
+    if (soonest && daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 1) {
+      notifications.push({
+        title: daysUntilDue === 0 ? `${soonest.name} is due today` : `${soonest.name} is due tomorrow`,
+        body: `$${soonest.amount.toFixed(2)}`,
+        url: "/dashboard",
+      });
+    }
 
-    const daysUntil = getDaysUntilDue(soonest.next_due_date);
-    if (daysUntil === null || daysUntil < 0 || daysUntil > 1) continue;
+    const { data: endingTrials } = await admin
+      .from("recurring_transactions")
+      .select("name, amount, trial_end_date")
+      .eq("user_id", profile.id)
+      .eq("is_active", true)
+      .eq("is_trial", true)
+      .not("trial_end_date", "is", null);
+
+    for (const trial of endingTrials ?? []) {
+      const daysUntilTrialEnd = getDaysUntilDue(trial.trial_end_date);
+      if (daysUntilTrialEnd === null || daysUntilTrialEnd < 0 || daysUntilTrialEnd > 2) continue;
+      notifications.push({
+        title:
+          daysUntilTrialEnd === 0
+            ? `${trial.name}'s free trial ends today`
+            : `${trial.name}'s free trial ends in ${daysUntilTrialEnd} day${daysUntilTrialEnd === 1 ? "" : "s"}`,
+        body: `It'll convert to $${trial.amount.toFixed(2)} unless you cancel first.`,
+        url: "/subscriptions",
+      });
+    }
+
+    if (notifications.length === 0) continue;
 
     const { data: subscriptions } = await admin
       .from("push_subscriptions")
@@ -53,19 +82,15 @@ export async function GET(request: Request) {
 
     if (!subscriptions || subscriptions.length === 0) continue;
 
-    const payload = {
-      title: daysUntil === 0 ? `${soonest.name} is due today` : `${soonest.name} is due tomorrow`,
-      body: `$${soonest.amount.toFixed(2)}`,
-      url: "/dashboard",
-    };
-
-    for (const sub of subscriptions) {
-      const result = await sendPushNotification(sub, payload);
-      if (result.success) {
-        notified++;
-      } else if (result.isGone) {
-        await admin.from("push_subscriptions").delete().eq("id", sub.id);
-        cleaned++;
+    for (const payload of notifications) {
+      for (const sub of subscriptions) {
+        const result = await sendPushNotification(sub, payload);
+        if (result.success) {
+          notified++;
+        } else if (result.isGone) {
+          await admin.from("push_subscriptions").delete().eq("id", sub.id);
+          cleaned++;
+        }
       }
     }
   }
