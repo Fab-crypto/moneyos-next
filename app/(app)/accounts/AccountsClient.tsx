@@ -204,10 +204,15 @@ export function AccountsClient({
 function ConnectAnotherBankRow({ onConnected }: { onConnected: () => void }) {
   const [open, setOpen] = useState(false);
 
+  function handleConnected() {
+    setOpen(false);
+    onConnected();
+  }
+
   if (open) {
     return (
       <MoneyCard>
-        <ConnectBank onConnected={onConnected} />
+        <ConnectBank onConnected={handleConnected} />
       </MoneyCard>
     );
   }
