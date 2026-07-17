@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  detectDuplicateSubscriptions,
+  findLongRunningSubscriptions,
+  computeHealthScore,
+} from "@/lib/subscription-health";
 import { SubscriptionsClient } from "./SubscriptionsClient";
 
 function monthlyEquivalent(amount: number, frequency: string): number {
@@ -20,7 +25,9 @@ export default async function SubscriptionsPage() {
 
   const { data: subsData } = await supabase
     .from("recurring_transactions")
-    .select("id, name, amount, frequency, next_due_date, category, review_status, source, account_id")
+    .select(
+      "id, name, amount, frequency, next_due_date, category, review_status, source, account_id, created_at, is_trial, trial_end_date"
+    )
     .eq("user_id", user.id)
     .eq("is_active", true)
     .is("merged_into_id", null)
@@ -54,6 +61,10 @@ export default async function SubscriptionsPage() {
     category: s.category,
     reviewStatus: s.review_status as "pending" | "confirmed" | "ignored",
     source: s.source as "detected" | "manual",
+    accountId: s.account_id,
+    createdAt: s.created_at,
+    isTrial: s.is_trial,
+    trialEndDate: s.trial_end_date,
     priceHistory: historyBySubId.get(s.id) ?? [],
   }));
 
@@ -61,5 +72,28 @@ export default async function SubscriptionsPage() {
   const monthlyTotal = billable.reduce((sum, s) => sum + monthlyEquivalent(s.amount, s.frequency), 0);
   const annualTotal = monthlyTotal * 12;
 
-  return <SubscriptionsClient subscriptions={subscriptions} monthlyTotal={monthlyTotal} annualTotal={annualTotal} />;
+  const analysisInput = subscriptions.map((s) => ({
+    id: s.id,
+    name: s.name,
+    accountId: s.accountId,
+    amount: s.amount,
+    reviewStatus: s.reviewStatus,
+    createdAt: s.createdAt,
+    priceHistory: s.priceHistory,
+  }));
+
+  const duplicates = detectDuplicateSubscriptions(analysisInput);
+  const longRunning = findLongRunningSubscriptions(analysisInput);
+  const healthScore = computeHealthScore(analysisInput, duplicates);
+
+  return (
+    <SubscriptionsClient
+      subscriptions={subscriptions}
+      monthlyTotal={monthlyTotal}
+      annualTotal={annualTotal}
+      duplicates={duplicates}
+      longRunningIds={longRunning.map((s) => s.id)}
+      healthScore={healthScore}
+    />
+  );
 }

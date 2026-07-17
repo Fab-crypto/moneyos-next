@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { CalendarDays, Sparkle, Loader2, TrendingUp, ChevronRight } from "lucide-react";
+import { CalendarDays, Sparkle, Loader2, TrendingUp, ChevronRight, Copy, Clock, Activity } from "lucide-react";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoodBadge } from "@/components/ui/MoodBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Toggle } from "@/components/ui/Toggle";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { formatMoney } from "@/lib/formatters";
@@ -23,25 +24,63 @@ interface Subscription {
   category: string | null;
   reviewStatus: "pending" | "confirmed" | "ignored";
   source: "detected" | "manual";
+  accountId: string;
+  createdAt: string;
+  isTrial: boolean;
+  trialEndDate: string | null;
   priceHistory: { amount: number; date: string }[];
+}
+
+interface DuplicateGroup {
+  normalizedName: string;
+  subscriptions: { id: string; name: string; amount: number }[];
+}
+
+interface HealthScoreResult {
+  score: number;
+  components: {
+    spendTrend: number;
+    renewalAwareness: number;
+    duplicateExposure: number;
+    priceStability: number;
+  };
 }
 
 interface SubscriptionsClientProps {
   subscriptions: Subscription[];
   monthlyTotal: number;
   annualTotal: number;
+  duplicates: DuplicateGroup[];
+  longRunningIds: string[];
+  healthScore: HealthScoreResult;
 }
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(iso + "T00:00:00"));
 }
 
-export function SubscriptionsClient({ subscriptions, monthlyTotal, annualTotal }: SubscriptionsClientProps) {
+function healthLabel(score: number): string {
+  if (score >= 80) return "Healthy";
+  if (score >= 60) return "Steady";
+  return "Worth a Look";
+}
+
+export function SubscriptionsClient({
+  subscriptions,
+  monthlyTotal,
+  annualTotal,
+  duplicates,
+  longRunningIds,
+  healthScore,
+}: SubscriptionsClientProps) {
   const reduceMotion = useReducedMotion();
   const [selected, setSelected] = useState<Subscription | null>(null);
 
   const pending = subscriptions.filter((s) => s.reviewStatus === "pending");
-  const confirmed = subscriptions.filter((s) => s.reviewStatus === "confirmed").sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate));
+  const confirmed = subscriptions
+    .filter((s) => s.reviewStatus === "confirmed")
+    .sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate));
+  const longRunningSet = new Set(longRunningIds);
 
   const pageContainer: Variants = {
     hidden: {},
@@ -80,9 +119,15 @@ export function SubscriptionsClient({ subscriptions, monthlyTotal, annualTotal }
             <>
               <motion.div variants={item}>
                 <MoneyCard glow className="mt-6 p-7">
-                  <SectionHeader icon={TrendingUp} iconClassName="gold-text">
-                    Monthly Total
-                  </SectionHeader>
+                  <div className="flex items-center justify-between">
+                    <SectionHeader icon={TrendingUp} iconClassName="gold-text">
+                      Monthly Total
+                    </SectionHeader>
+                    <MoodBadge
+                      label={`${healthScore.score} ${healthLabel(healthScore.score)}`}
+                      tone={healthScore.score >= 80 ? "success" : "neutral"}
+                    />
+                  </div>
                   <p className="tabular relative z-10 mt-4 font-heading text-[44px] font-bold leading-none tracking-[-0.02em] text-foreground">
                     ${formatMoney(monthlyTotal)}
                   </p>
@@ -90,6 +135,13 @@ export function SubscriptionsClient({ subscriptions, monthlyTotal, annualTotal }
                     ${formatMoney(annualTotal, { decimals: 0 })} a year across {confirmed.length + pending.length}{" "}
                     subscriptions
                   </p>
+
+                  <div className="mt-5 grid grid-cols-2 gap-3 border-t border-border/50 pt-5">
+                    <HealthComponent label="Spend Trend" value={healthScore.components.spendTrend} />
+                    <HealthComponent label="Renewal Awareness" value={healthScore.components.renewalAwareness} />
+                    <HealthComponent label="Duplicate Exposure" value={healthScore.components.duplicateExposure} />
+                    <HealthComponent label="Price Stability" value={healthScore.components.priceStability} />
+                  </div>
                 </MoneyCard>
               </motion.div>
 
@@ -99,6 +151,33 @@ export function SubscriptionsClient({ subscriptions, monthlyTotal, annualTotal }
                   <div className="space-y-3">
                     {pending.map((sub) => (
                       <PendingReviewCard key={sub.id} subscription={sub} />
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {duplicates.length > 0 && (
+                <motion.div variants={item} className="mt-6">
+                  <SectionHeader icon={Copy} iconClassName="text-muted-foreground" className="mb-3">
+                    Possible Duplicates
+                  </SectionHeader>
+                  <div className="space-y-3">
+                    {duplicates.map((group) => (
+                      <MoneyCard key={group.normalizedName}>
+                        <p className="text-[13px] leading-relaxed text-foreground/90">
+                          The same subscription is charging{" "}
+                          <span className="font-semibold">{group.subscriptions.length} different accounts</span> —
+                          worth checking whether that's intentional.
+                        </p>
+                        <div className="mt-3 space-y-1.5 border-t border-border/50 pt-3">
+                          {group.subscriptions.map((s) => (
+                            <div key={s.id} className="flex items-center justify-between text-[13px]">
+                              <span className="text-muted-foreground">{s.name}</span>
+                              <span className="tabular font-medium text-foreground/90">${formatMoney(s.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </MoneyCard>
                     ))}
                   </div>
                 </motion.div>
@@ -118,9 +197,18 @@ export function SubscriptionsClient({ subscriptions, monthlyTotal, annualTotal }
                         className="flex w-full items-center justify-between px-6 py-4 text-left transition-colors [@media(hover:hover)]:hover:bg-muted/50"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[15px] font-medium text-foreground">{sub.name}</p>
-                          <p className="mt-0.5 text-[13px] text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-[15px] font-medium text-foreground">{sub.name}</p>
+                            {sub.isTrial && <MoodBadge label="Trial" tone="neutral" />}
+                          </div>
+                          <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-muted-foreground">
                             Renews {formatDate(sub.nextDueDate)}
+                            {longRunningSet.has(sub.id) && (
+                              <span className="flex items-center gap-1 text-muted-foreground/70">
+                                <Clock size={11} />
+                                6+ months
+                              </span>
+                            )}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -150,6 +238,18 @@ export function SubscriptionsClient({ subscriptions, monthlyTotal, annualTotal }
           />
         </BottomSheet>
       )}
+    </div>
+  );
+}
+
+function HealthComponent({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Activity size={12} className="shrink-0 text-muted-foreground" />
+      <div className="min-w-0">
+        <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+        <p className="tabular text-[13px] font-semibold text-foreground/90">{value}</p>
+      </div>
     </div>
   );
 }
@@ -232,10 +332,16 @@ function SubscriptionDetail({
   const router = useRouter();
   const [name, setName] = useState(subscription.name);
   const [amount, setAmount] = useState(String(subscription.amount));
+  const [isTrial, setIsTrial] = useState(subscription.isTrial);
+  const [trialEndDate, setTrialEndDate] = useState(subscription.trialEndDate ?? "");
   const [saving, setSaving] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState("");
   const [confirmingIgnore, setConfirmingIgnore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [insight, setInsight] = useState<string | null>(null);
+  const [loadingInsight, setLoadingInsight] = useState(false);
+  const [script, setScript] = useState<string | null>(null);
+  const [loadingScript, setLoadingScript] = useState(false);
 
   async function handleSaveEdit() {
     setError(null);
@@ -244,11 +350,21 @@ function SubscriptionDetail({
       setError("Enter a valid name and amount.");
       return;
     }
+    if (isTrial && !trialEndDate) {
+      setError("Enter when the trial ends.");
+      return;
+    }
 
     setSaving(true);
     const { error: updateError } = await supabase
       .from("recurring_transactions")
-      .update({ name: name.trim(), amount: parsed, source: "manual" })
+      .update({
+        name: name.trim(),
+        amount: parsed,
+        source: "manual",
+        is_trial: isTrial,
+        trial_end_date: isTrial ? trialEndDate : null,
+      })
       .eq("id", subscription.id);
     setSaving(false);
 
@@ -292,6 +408,50 @@ function SubscriptionDetail({
     router.refresh();
   }
 
+  async function handleGetInsight() {
+    setLoadingInsight(true);
+    setInsight(null);
+    try {
+      const response = await fetch("/api/subscriptions/insight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriptionId: subscription.id }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setInsight(data.insight);
+      } else {
+        setInsight(data.error ?? "Couldn't get an insight right now.");
+      }
+    } catch (err) {
+      console.error("[subscriptions] insight request failed:", err);
+      setInsight("Couldn't get an insight right now.");
+    }
+    setLoadingInsight(false);
+  }
+
+  async function handleGetScript() {
+    setLoadingScript(true);
+    setScript(null);
+    try {
+      const response = await fetch("/api/subscriptions/cancellation-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriptionId: subscription.id }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setScript(data.script);
+      } else {
+        setScript(data.error ?? "Couldn't generate a script right now.");
+      }
+    } catch (err) {
+      console.error("[subscriptions] script request failed:", err);
+      setScript("Couldn't generate a script right now.");
+    }
+    setLoadingScript(false);
+  }
+
   return (
     <div>
       <p className="text-[17px] font-medium text-foreground">{subscription.name}</p>
@@ -314,6 +474,34 @@ function SubscriptionDetail({
           </div>
         </div>
       )}
+
+      <div className="mt-5 border-t border-border/50 pt-5">
+        <button
+          type="button"
+          onClick={handleGetInsight}
+          disabled={loadingInsight}
+          className="flex items-center gap-1.5 text-[13px] font-medium gold-text disabled:opacity-50"
+        >
+          {loadingInsight && <Loader2 size={12} className="animate-spin" />}
+          {loadingInsight ? "Thinking..." : "Get an AI insight"}
+        </button>
+        {insight && <p className="mt-2 text-[13px] leading-relaxed text-foreground/90">{insight}</p>}
+      </div>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={handleGetScript}
+          disabled={loadingScript}
+          className="flex items-center gap-1.5 text-[13px] font-medium gold-text disabled:opacity-50"
+        >
+          {loadingScript && <Loader2 size={12} className="animate-spin" />}
+          {loadingScript ? "Writing..." : "Draft a cancellation message"}
+        </button>
+        {script && (
+          <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90">{script}</p>
+        )}
+      </div>
 
       <div className="mt-5 space-y-3 border-t border-border/50 pt-5">
         <div>
@@ -342,6 +530,27 @@ function SubscriptionDetail({
             className="mt-2 w-full rounded-xl border-0 bg-muted px-4 py-3 text-[15px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-50"
           />
         </div>
+
+        <div className="flex items-center justify-between py-1">
+          <span className="text-[14px] text-foreground">This is a free trial</span>
+          <Toggle checked={isTrial} onChange={() => setIsTrial((v) => !v)} disabled={saving} label="Free trial" />
+        </div>
+
+        {isTrial && (
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Trial ends
+            </label>
+            <input
+              type="date"
+              value={trialEndDate}
+              onChange={(e) => setTrialEndDate(e.target.value)}
+              disabled={saving}
+              className="mt-2 w-full rounded-xl border-0 bg-muted px-4 py-3 text-[15px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-50"
+            />
+            <p className="mt-1.5 text-[12px] text-muted-foreground">We'll notify you before it converts.</p>
+          </div>
+        )}
       </div>
 
       {error && (
