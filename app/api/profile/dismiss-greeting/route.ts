@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST() {
   const supabase = await createClient();
@@ -10,6 +11,11 @@ export async function POST() {
 
   if (authError || !user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  const { success: withinLimit } = await checkRateLimit(`dismiss-greeting:${user.id}`);
+  if (!withinLimit) {
+    return NextResponse.json({ error: "Too many requests. Please wait a moment and try again." }, { status: 429 });
   }
 
   const todayIso = new Date().toISOString().slice(0, 10);

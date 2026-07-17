@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { CountryCode, Products } from "plaid";
 import { plaidClient } from "@/lib/plaid";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST() {
   const supabase = await createClient();
@@ -12,6 +13,11 @@ export async function POST() {
 
   if (authError || !user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  const { success: withinLimit } = await checkRateLimit(`plaid-create-link-token:${user.id}`);
+  if (!withinLimit) {
+    return NextResponse.json({ error: "Too many requests. Please wait a moment and try again." }, { status: 429 });
   }
 
   try {

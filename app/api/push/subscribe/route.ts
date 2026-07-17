@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 interface SubscribeBody {
   endpoint?: string;
@@ -15,6 +16,11 @@ export async function POST(request: Request) {
 
   if (authError || !user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  const { success: withinLimit } = await checkRateLimit(`push-subscribe:${user.id}`);
+  if (!withinLimit) {
+    return NextResponse.json({ error: "Too many requests. Please wait a moment and try again." }, { status: 429 });
   }
 
   let body: SubscribeBody;
