@@ -1,7 +1,20 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getInstitutionInfo } from "@/lib/plaid";
 import { AccountsClient } from "./AccountsClient";
-import { formatDueLabel } from "@/lib/date";
+
+function formatDueLabel(nextDueDate: string | null): string {
+  if (!nextDueDate) return "Due date not set";
+  const due = new Date(nextDueDate + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+  if (diffDays < 0) return "Overdue";
+  if (diffDays === 0) return "Due today";
+  if (diffDays === 1) return "Due tomorrow";
+  return `Due in ${diffDays} days`;
+}
 
 export default async function AccountsPage() {
   const supabase = await createClient();
@@ -14,7 +27,7 @@ export default async function AccountsPage() {
   }
 
   const [institutionsResult, accountsResult, billsResult] = await Promise.all([
-    supabase.from("institutions").select("id, name, status, last_synced_at, logo_url"),
+    supabase.from("institutions").select("id, name, status, last_synced_at, logo_url, plaid_institution_id"),
     supabase
       .from("accounts")
       .select("id, name, current_balance, type, subtype,institution_id")
@@ -28,7 +41,33 @@ export default async function AccountsPage() {
   ]);
 
   const rawAccounts = accountsResult.data ?? [];
-  const rawInstitutions = institutionsResult.data ?? [];
+  let rawInstitutions = institutionsResult.data ?? [];
+
+  const missingLogo = rawInstitutions.filter((inst) => !inst.logo_url && inst.plaid_institution_id);
+
+  if (missingLogo.length > 0) {
+    const admin = createAdminClient();
+
+    const backfillResults = await Promise.all(
+      missingLogo.map(async (inst) => {
+        const info = await getInstitutionInfo(inst.plaid_institution_id as string);
+        return { id: inst.id, logoUrl: info?.logoUrl ?? null };
+      })
+    );
+
+    const found = backfillResults.filter((r) => r.logoUrl);
+
+    if (found.length > 0) {
+      await Promise.all(
+        found.map((r) => admin.from("institutions").update({ logo_url: r.logoUrl }).eq("id", r.id))
+      );
+
+      const logoById = new Map(found.map((r) => [r.id, r.logoUrl]));
+      rawInstitutions = rawInstitutions.map((inst) =>
+        logoById.has(inst.id) ? { ...inst, logo_url: logoById.get(inst.id)! } : inst
+      );
+    }
+  }
 
   const DEBT_TYPES = new Set(["credit", "loan"]);
   const signedBalance = (type: string, balance: number) => (DEBT_TYPES.has(type) ? -balance : balance);

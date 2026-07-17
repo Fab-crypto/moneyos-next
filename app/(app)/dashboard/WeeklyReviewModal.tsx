@@ -39,6 +39,19 @@ export function WeeklyReviewModal({ review, onClose }: WeeklyReviewModalProps) {
   const { data } = review;
   const isNegative = data.moneySaved < 0;
 
+  async function handleClose() {
+    onClose();
+    try {
+      await fetch("/api/reviews/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: review.id }),
+      });
+    } catch (err) {
+      console.error("[weekly-review] dismiss failed:", err);
+    }
+  }
+
   async function handleShare() {
     const text = `MoneyOS Weekly Review — ${formatDateRange(review.periodStart, review.periodEnd)}\nMoney saved: ${
       isNegative ? "-" : ""
@@ -79,7 +92,7 @@ export function WeeklyReviewModal({ review, onClose }: WeeklyReviewModalProps) {
             </div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               aria-label="Close"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground transition-opacity hover:opacity-80"
             >
