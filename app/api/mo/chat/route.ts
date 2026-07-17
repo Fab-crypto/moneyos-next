@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { anthropic } from "@/lib/anthropic";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { daysAgo } from "@/lib/date";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 function buildSystemPrompt(context: string): string {
   return `You are MO, a calm, supportive money coach inside the MoneyOS app.

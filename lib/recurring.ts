@@ -22,7 +22,7 @@ export interface RecurringBillResult {
   category: string | null;
 }
 
-function normalizeMerchant(description: string): string {
+export function normalizeMerchant(description: string): string {
   return (description || "")
     .toLowerCase()
     .replace(/[#*].*$/g, "")
