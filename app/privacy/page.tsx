@@ -178,14 +178,15 @@ export default function PrivacyPolicyPage() {
               account's transaction history and revokes MoneyOS's access with Plaid immediately.
             </p>
             <p className="mt-3">
-              <strong className="text-foreground">Account deletion.</strong> You may request
-              deletion of your account and all associated data at any time by emailing{" "}
+              <strong className="text-foreground">Account deletion.</strong> You can permanently
+              delete your account and all associated data at any time from your Profile settings
+              in the app. This immediately revokes MoneyOS&apos;s access with Plaid, cancels any active
+              subscription, and removes your account. You can also request deletion by emailing{" "}
               <a href="mailto:odukfabian@gmail.com" className="gold-text underline">
                 odukfabian@gmail.com
               </a>{" "}
-              from the email address associated with your account. We will process verified
-              deletion requests within 30 days. We are working to provide an in-app self-service
-              deletion feature in the future.
+              from the email address associated with your account; we will process verified
+              email requests within 30 days.
             </p>
             <p className="mt-3">
               <strong className="text-foreground">Notifications.</strong> You can turn account
