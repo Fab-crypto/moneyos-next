@@ -36,7 +36,8 @@ export async function getInstitutionInfo(institutionId: string) {
         ? `data:image/png;base64,${response.data.institution.logo}`
         : null,
     };
-  } catch {
+  } catch (err) {
+    console.error(`[plaid] institutionsGetById failed for institution=${institutionId}:`, err);
     return null;
   }
 }

@@ -3,9 +3,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlaidLink, type PlaidLinkOnSuccess, type PlaidLinkOnExit } from "react-plaid-link";
 import { motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
-type ConnectStatus = "idle" | "fetching_token" | "awaiting_link" | "exchanging" | "error";
+type ConnectStatus =
+  | "idle"
+  | "checking_mfa"
+  | "mfa_not_enrolled"
+  | "mfa_step_up"
+  | "fetching_token"
+  | "awaiting_link"
+  | "exchanging"
+  | "error";
 
 interface ConnectBankProps {
   onConnected?: (accountsConnected: number) => void;
@@ -16,6 +26,11 @@ export function ConnectBank({ onConnected, className }: ConnectBankProps) {
   const [status, setStatus] = useState<ConnectStatus>("idle");
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [stepUpFactorId, setStepUpFactorId] = useState<string | null>(null);
+  const [stepUpCode, setStepUpCode] = useState("");
+  const [stepUpVerifying, setStepUpVerifying] = useState(false);
+  const [stepUpError, setStepUpError] = useState<string | null>(null);
 
   const shouldOpenRef = useRef(false);
 
@@ -80,15 +95,25 @@ export function ConnectBank({ onConnected, className }: ConnectBankProps) {
     }
   }, [ready, linkToken, open]);
 
-  async function handleConnectClick() {
+  // Actually fetch the link token from the server. The server independently re-checks
+  // MFA status (defense in depth) even though we've already gated on the client below.
+  async function fetchLinkToken() {
     setStatus("fetching_token");
     setErrorMessage(null);
 
     try {
       const response = await fetch("/api/plaid/create-link-token", { method: "POST" });
-      const data: { link_token?: string; error?: string } = await response.json();
+      const data: { link_token?: string; error?: string; code?: string } = await response.json();
 
       if (!response.ok || !data.link_token) {
+        if (data.code === "mfa_not_enrolled") {
+          setStatus("mfa_not_enrolled");
+          return;
+        }
+        if (data.code === "mfa_step_up_required") {
+          await beginStepUp();
+          return;
+        }
         throw new Error(data.error ?? "Failed to start bank connection.");
       }
 
@@ -100,15 +125,172 @@ export function ConnectBank({ onConnected, className }: ConnectBankProps) {
     }
   }
 
-  const isBusy = status === "fetching_token" || status === "awaiting_link" || status === "exchanging";
+  async function beginStepUp() {
+    const { data: factorsData, error: factorsError } = await supabase.auth.mfa.listFactors();
+    const totpFactor = factorsData?.totp?.find((f) => f.status === "verified");
+
+    if (factorsError || !totpFactor) {
+      setStatus("mfa_not_enrolled");
+      return;
+    }
+
+    setStepUpFactorId(totpFactor.id);
+    setStepUpCode("");
+    setStepUpError(null);
+    setStatus("mfa_step_up");
+  }
+
+  async function handleConnectClick() {
+    setStatus("checking_mfa");
+    setErrorMessage(null);
+
+    try {
+      const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+      if (aalError || !aal) {
+        setStatus("error");
+        setErrorMessage("Could not verify your security status. Please try again.");
+        return;
+      }
+
+      // No factor enrolled at all - block until the user sets one up.
+      if (aal.nextLevel === "aal1") {
+        setStatus("mfa_not_enrolled");
+        return;
+      }
+
+      // A factor exists but this session hasn't completed the challenge yet
+      // (e.g. a session from before MFA was enrolled, or a fresh device).
+      if (aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+        await beginStepUp();
+        return;
+      }
+
+      await fetchLinkToken();
+    } catch {
+      setStatus("error");
+      setErrorMessage("Could not verify your security status. Please try again.");
+    }
+  }
+
+  async function handleStepUpVerify() {
+    if (!stepUpFactorId || stepUpCode.length < 6) return;
+    setStepUpVerifying(true);
+    setStepUpError(null);
+
+    const { error } = await supabase.auth.mfa.challengeAndVerify({
+      factorId: stepUpFactorId,
+      code: stepUpCode,
+    });
+
+    setStepUpVerifying(false);
+
+    if (error) {
+      setStepUpError("That code didn't work. Check your authenticator app and try again.");
+      return;
+    }
+
+    setStepUpFactorId(null);
+    setStepUpCode("");
+    await fetchLinkToken();
+  }
+
+  const isBusy =
+    status === "checking_mfa" ||
+    status === "fetching_token" ||
+    status === "awaiting_link" ||
+    status === "exchanging";
 
   const buttonLabel: Record<ConnectStatus, string> = {
     idle: "Connect Bank",
+    checking_mfa: "Checking security...",
+    mfa_not_enrolled: "Connect Bank",
+    mfa_step_up: "Connect Bank",
     fetching_token: "Preparing...",
     awaiting_link: "Opening...",
     exchanging: "Connecting...",
     error: "Try Again",
   };
+
+  if (status === "mfa_not_enrolled") {
+    return (
+      <div className={className}>
+        <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
+          <div className="flex items-start gap-2.5">
+            <ShieldCheck size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
+            <div>
+              <p className="text-[14px] font-medium text-foreground">Set up two-factor authentication first</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                To keep your linked accounts secure, MoneyOS requires two-factor authentication before
+                connecting a bank.
+              </p>
+              <Link
+                href="/profile/security"
+                className="mt-3 inline-flex h-10 items-center rounded-lg bg-foreground px-4 text-[13px] font-medium text-background transition-opacity hover:opacity-90"
+              >
+                Set up now
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "mfa_step_up") {
+    return (
+      <div className={className}>
+        <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
+          <div className="flex items-start gap-2.5">
+            <ShieldCheck size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-medium text-foreground">Verify it&apos;s you</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                Enter the 6-digit code from your authenticator app to continue.
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoFocus
+                maxLength={6}
+                value={stepUpCode}
+                onChange={(e) => {
+                  setStepUpCode(e.target.value.replace(/\D/g, ""));
+                  setStepUpError(null);
+                }}
+                placeholder="000000"
+                className="mt-3 w-full rounded-lg border-0 bg-background px-3 py-2.5 text-center text-[16px] tracking-[0.3em] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold"
+              />
+              {stepUpError && (
+                <p className="mt-2 text-xs font-medium text-danger" role="alert">
+                  {stepUpError}
+                </p>
+              )}
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStatus("idle")}
+                  disabled={stepUpVerifying}
+                  className="h-10 flex-1 rounded-lg bg-muted text-[13px] font-medium text-foreground transition-colors hover:bg-muted/80 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStepUpVerify}
+                  disabled={stepUpVerifying || stepUpCode.length < 6}
+                  className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-foreground text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {stepUpVerifying && <Loader2 size={12} className="animate-spin" />}
+                  {stepUpVerifying ? "Verifying..." : "Verify"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={className}>

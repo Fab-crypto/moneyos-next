@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [message, setMessage] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -50,6 +51,26 @@ export default function LoginPage() {
     }
   }
 
+  async function handlePasskeySignIn() {
+    setPasskeyLoading(true);
+    setMessage("");
+
+    // Passkey support in Supabase Auth is experimental. If this fails (e.g. no
+    // passkey registered on this device/browser, or the browser cancels the
+    // prompt), we just fall back to the password form below - nothing else
+    // on this page depends on it working.
+    const { error } = await supabase.auth.signInWithPasskey();
+
+    if (error) {
+      setPasskeyLoading(false);
+      setMessage(error.message || "Passkey sign-in didn't work. Use your password instead, or try again.");
+      return;
+    }
+
+    setMessage("Signed in. Redirecting...");
+    window.location.href = "/dashboard";
+  }
+
   return (
     <main className="min-h-screen bg-background flex items-center justify-center px-6">
       <div className="w-full max-w-md">
@@ -64,8 +85,17 @@ export default function LoginPage() {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-5">
           <button
             type="button"
+            onClick={handlePasskeySignIn}
+            disabled={passkeyLoading || loading || googleLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-zinc-700 bg-zinc-800 py-4 font-semibold text-white transition-opacity disabled:opacity-50"
+          >
+            {passkeyLoading ? "Waiting for passkey..." : "Sign in with a passkey"}
+          </button>
+
+          <button
+            type="button"
             onClick={handleGoogleSignIn}
-            disabled={googleLoading || loading}
+            disabled={googleLoading || loading || passkeyLoading}
             className="flex w-full items-center justify-center gap-3 rounded-xl bg-white py-4 font-semibold text-black transition-opacity disabled:opacity-50"
           >
             <GoogleIcon />
@@ -129,7 +159,7 @@ export default function LoginPage() {
               href="/auth/signup"
               className="block text-center text-sm text-gray-400 hover:text-white"
             >
-              Don't have an account? Create one
+              Don&apos;t have an account? Create one
             </Link>
 
             <p className="text-center text-xs text-gray-500">
