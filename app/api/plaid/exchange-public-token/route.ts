@@ -28,6 +28,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
 
+  // Defense in depth, matching create-link-token: this route is where a bank
+  // account actually gets linked, so it must independently re-check MFA rather
+  // than trusting that the client only got here via a gated link_token.
+  const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+  if (aalError || !aal) {
+    console.error("[plaid/exchange] AAL check failed:", aalError);
+    return NextResponse.json(
+      { error: "Could not verify your security status.", code: "mfa_check_failed" },
+      { status: 500 }
+    );
+  }
+
+  if (aal.nextLevel === "aal1") {
+    return NextResponse.json(
+      {
+        error: "Two-factor authentication must be set up before connecting a bank account.",
+        code: "mfa_not_enrolled",
+      },
+      { status: 403 }
+    );
+  }
+
+  if (aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+    return NextResponse.json(
+      {
+        error: "Please verify your two-factor authentication code to continue.",
+        code: "mfa_step_up_required",
+      },
+      { status: 403 }
+    );
+  }
+
   let rawBody: unknown;
   try {
     rawBody = await request.json();

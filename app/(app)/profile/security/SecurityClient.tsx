@@ -138,7 +138,14 @@ function TwoFactorCard() {
 
   async function cancelEnroll() {
     if (pendingFactorId) {
-      await supabase.auth.mfa.unenroll({ factorId: pendingFactorId });
+      const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId: pendingFactorId });
+      if (unenrollError) {
+        // Don't silently reset - an unverified factor left behind here is invisible
+        // (the list below only shows verified factors) and can eventually exhaust
+        // Supabase's per-user factor cap, permanently blocking future enrollment.
+        setError("Couldn't cancel cleanly. Please try again before leaving this page.");
+        return;
+      }
     }
     setPendingFactorId(null);
     setQrCode(null);
