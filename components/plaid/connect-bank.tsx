@@ -32,6 +32,9 @@ export function ConnectBank({ onConnected, className }: ConnectBankProps) {
   const [stepUpVerifying, setStepUpVerifying] = useState(false);
   const [stepUpError, setStepUpError] = useState<string | null>(null);
 
+  // TEMPORARY diagnostic - remove once the passkey/AAL bypass is confirmed fixed.
+  const [debugAal, setDebugAal] = useState<string | null>(null);
+
   const shouldOpenRef = useRef(false);
 
   const handleSuccess = useCallback<PlaidLinkOnSuccess>(async (public_token, metadata) => {
@@ -159,14 +162,28 @@ export function ConnectBank({ onConnected, className }: ConnectBankProps) {
         return;
       }
 
-      // Don't trust the generic aal2 label alone - Supabase reports aal2 for
-      // a passkey-only sign-in even without a real TOTP challenge this
-      // session, since WebAuthn is treated as a strong primary method.
-      // Require an explicit "totp" entry in this session's AMR list instead.
+      // A factor exists, but Supabase reports aal2 for a passkey-only sign-in
+      // even with no real TOTP challenge this session - require an explicit
+      // "totp" AMR entry rather than trusting the generic aal2 label.
       const authMethods = (aal.currentAuthenticationMethods ?? []).map((entry) =>
         typeof entry === "string" ? entry : entry.method
       );
       const hasVerifiedTotpThisSession = authMethods.includes("totp") || authMethods.includes("mfa/totp");
+
+      // TEMPORARY diagnostic - remove once the passkey/AAL bypass is confirmed fixed.
+      setDebugAal(
+        JSON.stringify(
+          {
+            currentLevel: aal.currentLevel,
+            nextLevel: aal.nextLevel,
+            rawAmr: aal.currentAuthenticationMethods,
+            parsedAuthMethods: authMethods,
+            hasVerifiedTotpThisSession,
+          },
+          null,
+          2
+        )
+      );
 
       if (!hasVerifiedTotpThisSession) {
         await beginStepUp();
@@ -310,6 +327,15 @@ export function ConnectBank({ onConnected, className }: ConnectBankProps) {
         {isBusy && <Loader2 size={16} className="animate-spin" />}
         {buttonLabel[status]}
       </button>
+
+      {/* TEMPORARY diagnostic - remove once the passkey/AAL bypass is confirmed fixed. */}
+      {debugAal && (
+        <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-yellow-500/60 bg-yellow-500/10 p-3 text-[11px] text-yellow-900 dark:text-yellow-200">
+          DEBUG AAL (temporary - screenshot this):
+          {"\n"}
+          {debugAal}
+        </pre>
+      )}
 
       {status === "error" && errorMessage && (
         <motion.p

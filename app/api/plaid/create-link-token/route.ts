@@ -38,12 +38,9 @@ export async function POST() {
     );
   }
 
-  // Don't trust Supabase's generic aal2 label alone - a passkey-only sign-in is
-  // reported as aal2 even without a real TOTP challenge this session, since
-  // WebAuthn is treated as a strong primary method. Explicitly require a
-  // "totp" entry in this session's AMR list, so the actual, intended policy
-  // (a real TOTP challenge, every session) can't be bypassed by signing in a
-  // different way.
+  // Supabase reports aal2 for a passkey-only sign-in with no real TOTP challenge
+  // this session, so require an explicit "totp" AMR entry rather than trusting
+  // the generic aal2 label (matches exchange-public-token/route.ts).
   const authMethods = (aal.currentAuthenticationMethods ?? []).map((entry) =>
     typeof entry === "string" ? entry : entry.method
   );
