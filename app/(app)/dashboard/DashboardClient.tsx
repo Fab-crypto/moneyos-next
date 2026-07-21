@@ -43,6 +43,13 @@ interface GoalFocus {
   remaining: number;
 }
 
+interface PrimaryGoal {
+  name: string;
+  currentAmount: number;
+  targetAmount: number;
+  percent: number;
+}
+
 interface DashboardClientProps {
   firstName: string;
   today: string;
@@ -56,9 +63,10 @@ interface DashboardClientProps {
   showGreeting: boolean;
   goalFocus: GoalFocus | null;
   monthlySavings: number;
+  weeklyHeadline: string;
+  monthSoFarInsight: string;
+  primaryGoal: PrimaryGoal | null;
 }
-
-const EMERGENCY_FUND_PCT = 71;
 
 export function DashboardClient({
   firstName,
@@ -73,6 +81,9 @@ export function DashboardClient({
   showGreeting,
   goalFocus,
   monthlySavings,
+  weeklyHeadline,
+  monthSoFarInsight,
+  primaryGoal,
 }: DashboardClientProps) {
   const reduceMotion = useReducedMotion();
   const [greetingDismissed, setGreetingDismissed] = useState(false);
@@ -103,9 +114,7 @@ export function DashboardClient({
               {firstName}
             </h1>
             <p className="mt-2 text-[14px] text-muted-foreground">{today}</p>
-            <p className="mt-5 text-[15px] font-medium leading-relaxed text-foreground">
-              You saved <span className="text-success">$42</span> more than expected this week.
-            </p>
+            <p className="mt-5 text-[15px] font-medium leading-relaxed text-foreground">{weeklyHeadline}</p>
           </motion.section>
 
           {dueSoonBill && (
@@ -192,10 +201,10 @@ export function DashboardClient({
                 <>
                   <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-foreground">
                     <CheckCircle2 size={16} className="text-success" />
-                    You're on track
+                    You&apos;re on track
                   </div>
                   <p className="mt-3 max-w-[85%] text-[15px] leading-relaxed text-muted-foreground/85">
-                    Spend comfortably today without dipping into tomorrow's budget.
+                    Spend comfortably today without dipping into tomorrow&apos;s budget.
                   </p>
                 </>
               ) : (
@@ -211,10 +220,7 @@ export function DashboardClient({
               <SectionHeader icon={BookOpen} iconClassName="gold-text">
                 Your Month So Far
               </SectionHeader>
-              <p className="mt-4 text-[15px] font-medium leading-relaxed text-foreground">
-                You're under budget in 3 of your top 4 categories. Groceries are slightly higher than
-                usual.
-              </p>
+              <p className="mt-4 text-[15px] font-medium leading-relaxed text-foreground">{monthSoFarInsight}</p>
             </MoneyCard>
           </motion.div>
 
@@ -264,29 +270,47 @@ export function DashboardClient({
           </motion.div>
 
           <motion.div variants={item} whileTap={{ scale: 0.985 }}>
-            <MoneyCard className="mt-5">
-              <div className="mb-4 flex items-center justify-between">
-                <SectionHeader icon={Trophy} iconClassName="gold-text">
-                  Emergency Fund
-                </SectionHeader>
-                <span className="text-sm font-semibold text-foreground">{EMERGENCY_FUND_PCT}%</span>
-              </div>
+            {primaryGoal ? (
+              <MoneyCard className="mt-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <SectionHeader icon={Trophy} iconClassName="gold-text">
+                    {primaryGoal.name}
+                  </SectionHeader>
+                  <span className="text-sm font-semibold text-foreground">{primaryGoal.percent}%</span>
+                </div>
 
-              <div className="mb-3 flex items-center justify-between text-sm font-semibold text-foreground">
-                <span>$10,650</span>
-                <span>$15,000</span>
-              </div>
+                <div className="mb-3 flex items-center justify-between text-sm font-semibold text-foreground">
+                  <span>${formatMoney(primaryGoal.currentAmount)}</span>
+                  <span>${formatMoney(primaryGoal.targetAmount)}</span>
+                </div>
 
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <motion.div
-                  initial={{ width: 0 }}
-                  whileInView={{ width: `${EMERGENCY_FUND_PCT}%` }}
-                  viewport={{ once: true }}
-                  transition={{ duration: reduceMotion ? 0 : 0.8, ease: EASE }}
-                  className="h-full rounded-full bg-foreground"
-                />
-              </div>
-            </MoneyCard>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    whileInView={{ width: `${primaryGoal.percent}%` }}
+                    viewport={{ once: true }}
+                    transition={{ duration: reduceMotion ? 0 : 0.8, ease: EASE }}
+                    className="h-full rounded-full bg-foreground"
+                  />
+                </div>
+              </MoneyCard>
+            ) : (
+              <Link href="/goals" className="block">
+                <MoneyCard className="mt-5">
+                  <SectionHeader icon={Trophy} iconClassName="text-muted-foreground">
+                    Goals
+                  </SectionHeader>
+                  <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
+                    You haven&apos;t set up a savings goal yet — like an emergency fund. Create one to track
+                    your progress here.
+                  </p>
+                  <div className="mt-4 flex items-center gap-1 text-[14px] font-medium gold-text">
+                    Create a Goal
+                    <ArrowRight size={14} />
+                  </div>
+                </MoneyCard>
+              </Link>
+            )}
           </motion.div>
         </motion.main>
       </div>
