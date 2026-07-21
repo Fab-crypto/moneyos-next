@@ -51,7 +51,15 @@ export async function POST(request: Request) {
     );
   }
 
-  if (aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+  // See create-link-token/route.ts - Supabase reports aal2 for a passkey-only
+  // sign-in with no real TOTP challenge this session, so require an explicit
+  // "totp" AMR entry rather than trusting the generic aal2 label.
+  const authMethods = (aal.currentAuthenticationMethods ?? []).map((entry) =>
+    typeof entry === "string" ? entry : entry.method
+  );
+  const hasVerifiedTotpThisSession = authMethods.includes("totp") || authMethods.includes("mfa/totp");
+
+  if (!hasVerifiedTotpThisSession) {
     return NextResponse.json(
       {
         error: "Please verify your two-factor authentication code to continue.",

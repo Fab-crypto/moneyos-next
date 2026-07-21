@@ -159,9 +159,16 @@ export function ConnectBank({ onConnected, className }: ConnectBankProps) {
         return;
       }
 
-      // A factor exists but this session hasn't completed the challenge yet
-      // (e.g. a session from before MFA was enrolled, or a fresh device).
-      if (aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+      // Don't trust the generic aal2 label alone - Supabase reports aal2 for
+      // a passkey-only sign-in even without a real TOTP challenge this
+      // session, since WebAuthn is treated as a strong primary method.
+      // Require an explicit "totp" entry in this session's AMR list instead.
+      const authMethods = (aal.currentAuthenticationMethods ?? []).map((entry) =>
+        typeof entry === "string" ? entry : entry.method
+      );
+      const hasVerifiedTotpThisSession = authMethods.includes("totp") || authMethods.includes("mfa/totp");
+
+      if (!hasVerifiedTotpThisSession) {
         await beginStepUp();
         return;
       }

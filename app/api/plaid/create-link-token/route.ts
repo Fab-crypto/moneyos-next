@@ -38,7 +38,18 @@ export async function POST() {
     );
   }
 
-  if (aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+  // Don't trust Supabase's generic aal2 label alone - a passkey-only sign-in is
+  // reported as aal2 even without a real TOTP challenge this session, since
+  // WebAuthn is treated as a strong primary method. Explicitly require a
+  // "totp" entry in this session's AMR list, so the actual, intended policy
+  // (a real TOTP challenge, every session) can't be bypassed by signing in a
+  // different way.
+  const authMethods = (aal.currentAuthenticationMethods ?? []).map((entry) =>
+    typeof entry === "string" ? entry : entry.method
+  );
+  const hasVerifiedTotpThisSession = authMethods.includes("totp") || authMethods.includes("mfa/totp");
+
+  if (!hasVerifiedTotpThisSession) {
     return NextResponse.json(
       {
         error: "Please verify your two-factor authentication code to continue.",
