@@ -40,7 +40,9 @@ export default function ResetPasswordPage() {
 
     if (error) {
       console.error("[reset-password] updateUser failed:", error);
-      setError("Failed to update password. Please try again.");
+      // TEMPORARY: show the real Supabase error message so we can diagnose why
+      // this is failing, instead of a generic message that hides the cause.
+      setError(`Failed to update password: ${error.message} (code: ${error.code ?? error.status ?? "unknown"})`);
       return;
     }
 
