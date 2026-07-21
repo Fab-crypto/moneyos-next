@@ -101,7 +101,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error(`[plaid-webhook] processing failed for item=${body.item_id}:`, err);
+    console.error("[plaid-webhook] processing failed for item:", body.item_id, err);
     // Still respond 200 — Plaid retries on non-2xx responses, and our
     // sync logic is cursor-based and safe to run again, so a retry
     // storm from Plaid would add no value here.

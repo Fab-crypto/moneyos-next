@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     .eq("user_id", user.id);
 
   if (error) {
-    console.error(`[reviews] failed to dismiss snapshot=${body.id} for user=${user.id}:`, error);
+    console.error("[reviews] failed to dismiss snapshot for user:", body.id, user.id, error);
     return NextResponse.json({ error: "Failed to save. Please try again." }, { status: 500 });
   }
 

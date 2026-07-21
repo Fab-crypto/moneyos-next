@@ -37,7 +37,7 @@ export async function getInstitutionInfo(institutionId: string) {
         : null,
     };
   } catch (err) {
-    console.error(`[plaid] institutionsGetById failed for institution=${institutionId}:`, err);
+    console.error("[plaid] institutionsGetById failed for institution:", institutionId, err);
     return null;
   }
 }
