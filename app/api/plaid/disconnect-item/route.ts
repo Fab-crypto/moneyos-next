@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     } catch (err) {
       // Log and continue — a sandbox item already invalidated, or a
       // token that's expired, shouldn't block removing our own records.
-      console.error(`[plaid/disconnect] itemRemove failed for plaid_item=${item.id} (continuing):`, err);
+      console.error("[plaid/disconnect] itemRemove failed for plaid_item (continuing):", item.id, err);
     }
 
     const { data: accountsToRemove } = await admin
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
         .delete()
         .in("account_id", accountIds);
       if (txDeleteError) {
-        console.error(`[plaid/disconnect] transactions delete failed for item=${item.id}:`, txDeleteError);
+        console.error("[plaid/disconnect] transactions delete failed for item:", item.id, txDeleteError);
       }
 
       // recurring_transactions.account_id is ON DELETE SET NULL, not
@@ -109,7 +109,8 @@ export async function POST(request: Request) {
         .in("account_id", accountIds);
       if (recurringDeleteError) {
         console.error(
-          `[plaid/disconnect] recurring_transactions delete failed for item=${item.id}:`,
+          "[plaid/disconnect] recurring_transactions delete failed for item:",
+          item.id,
           recurringDeleteError
         );
       }
@@ -120,12 +121,12 @@ export async function POST(request: Request) {
       .delete()
       .eq("plaid_item_id", item.id);
     if (accountsDeleteError) {
-      console.error(`[plaid/disconnect] accounts delete failed for item=${item.id}:`, accountsDeleteError);
+      console.error("[plaid/disconnect] accounts delete failed for item:", item.id, accountsDeleteError);
     }
 
     const { error: itemDeleteError } = await admin.from("plaid_items").delete().eq("id", item.id);
     if (itemDeleteError) {
-      console.error(`[plaid/disconnect] plaid_items delete failed for item=${item.id}:`, itemDeleteError);
+      console.error("[plaid/disconnect] plaid_items delete failed for item:", item.id, itemDeleteError);
     }
   }
 
@@ -142,7 +143,7 @@ export async function POST(request: Request) {
     );
   }
 
-  console.log(`[plaid/disconnect] success: user=${user.id} institution=${institutionId} items=${items?.length ?? 0}`);
+  console.log("[plaid/disconnect] success:", user.id, institutionId, items?.length ?? 0);
 
   return NextResponse.json({ success: true });
 }

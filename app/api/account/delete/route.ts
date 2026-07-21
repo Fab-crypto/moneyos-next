@@ -34,7 +34,7 @@ export async function POST() {
       const accessToken = decryptToken(item.access_token_encrypted);
       await plaidClient.itemRemove({ access_token: accessToken });
     } catch (err) {
-      console.error(`[account-delete] failed to revoke Plaid item=${item.plaid_item_id} for user=${user.id}:`, err);
+      console.error("[account-delete] failed to revoke Plaid item for user:", item.plaid_item_id, user.id, err);
     }
   }
 
@@ -55,7 +55,7 @@ export async function POST() {
   const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
 
   if (deleteError) {
-    console.error(`[account-delete] failed to delete user=${user.id}:`, deleteError);
+    console.error("[account-delete] failed to delete user:", user.id, deleteError);
     return NextResponse.json(
       { error: "Failed to delete account. Please try again or contact support." },
       { status: 500 }
