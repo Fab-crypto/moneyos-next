@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { plaidClient } from "@/lib/plaid";
 
 export async function syncLoanDetails(
-  admin: SupabaseClient<any, "public", any>,
+  admin: SupabaseClient,
   userId: string,
   accessToken: string,
   accountIdByPlaidId: Map<string, string>
@@ -120,7 +120,7 @@ export async function syncLoanDetails(
 }
 
 export async function recordLoanBalanceSnapshots(
-  admin: SupabaseClient<any, "public", any>,
+  admin: SupabaseClient,
   userId: string
 ): Promise<void> {
   const { data: loanAccountRows } = await admin

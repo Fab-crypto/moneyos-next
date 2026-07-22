@@ -60,7 +60,7 @@ export function buildMonthlyStorySlides(story: MonthlyStoryData): React.ReactNod
         </p>
         {story.isFirstMonthTracked && (
           <p className="mt-5 max-w-[280px] text-[13px] leading-relaxed text-white/50">
-            First month being tracked — next month's story will show real progress.
+            First month being tracked — next month&apos;s story will show real progress.
           </p>
         )}
       </div>

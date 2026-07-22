@@ -167,7 +167,7 @@ export function SubscriptionsClient({
                         <p className="text-[13px] leading-relaxed text-foreground/90">
                           The same subscription is charging{" "}
                           <span className="font-semibold">{group.subscriptions.length} different accounts</span> —
-                          worth checking whether that's intentional.
+                          worth checking whether that&apos;s intentional.
                         </p>
                         <div className="mt-3 space-y-1.5 border-t border-border/50 pt-3">
                           {group.subscriptions.map((s) => (
@@ -548,7 +548,7 @@ function SubscriptionDetail({
               disabled={saving}
               className="mt-2 w-full rounded-xl border-0 bg-muted px-4 py-3 text-[15px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-50"
             />
-            <p className="mt-1.5 text-[12px] text-muted-foreground">We'll notify you before it converts.</p>
+            <p className="mt-1.5 text-[12px] text-muted-foreground">We&apos;ll notify you before it converts.</p>
           </div>
         )}
       </div>
@@ -605,13 +605,13 @@ function SubscriptionDetail({
             onClick={() => setConfirmingIgnore(true)}
             className="text-[13px] font-medium text-muted-foreground transition-colors [@media(hover:hover)]:hover:text-danger"
           >
-            This isn't a real subscription
+            This isn&apos;t a real subscription
           </button>
         ) : (
           <div>
             <p className="text-[13px] font-medium text-foreground">Remove from Subscriptions?</p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              It'll also disappear from Upcoming Bills — you can always mark it recurring again from Transactions.
+              It&apos;ll also disappear from Upcoming Bills — you can always mark it recurring again from Transactions.
             </p>
             <div className="mt-3 flex gap-2">
               <button

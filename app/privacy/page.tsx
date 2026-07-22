@@ -14,14 +14,14 @@ export default function PrivacyPolicyPage() {
         <div className="mt-10 space-y-8 text-[15px] leading-relaxed text-foreground/90">
           <section>
             <p>
-              MoneyOS ("MoneyOS," "we," "us," or "our") is operated by Fabian Oduk. This Privacy
+              MoneyOS (&quot;MoneyOS,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is operated by Fabian Oduk. This Privacy
               Policy explains what information we collect when you use MoneyOS, how we use it, who
               we share it with, and the choices you have. By using MoneyOS, you agree to the
               practices described here.
             </p>
             <p className="mt-4">
               This policy is written to accurately describe what MoneyOS actually does today. It
-              will be updated as the product changes, and we'll note the effective date above
+              will be updated as the product changes, and we&apos;ll note the effective date above
               whenever that happens.
             </p>
           </section>
@@ -50,11 +50,11 @@ export default function PrivacyPolicyPage() {
             </p>
             <p className="mt-3">
               <strong className="text-foreground">Conversations with MO (MoneyOS Plus only).</strong>{" "}
-              If you use MO's free-form chat feature (available to MoneyOS Plus subscribers), your
+              If you use MO&apos;s free-form chat feature (available to MoneyOS Plus subscribers), your
               questions and a summary of your relevant financial data (such as your Safe to Spend
               balance, recent spending by category, and upcoming bills) are sent to Anthropic, our
               AI provider, in order to generate a response. This only happens when you actively use
-              the chat feature — it does not happen automatically or in the background. MO's
+              the chat feature — it does not happen automatically or in the background. MO&apos;s
               responses are AI-generated, informational only, and may contain mistakes — always
               verify anything important against your own bank or financial records rather than
               relying on MO alone.
@@ -73,7 +73,7 @@ export default function PrivacyPolicyPage() {
               2. How We Use Your Information
             </h2>
             <ul className="mt-3 list-disc space-y-2 pl-5">
-              <li>To operate MoneyOS's core features — showing your balances, transactions, spending patterns, and MO's insights.</li>
+              <li>To operate MoneyOS&apos;s core features — showing your balances, transactions, spending patterns, and MO&apos;s insights.</li>
               <li>To process your MoneyOS Plus subscription and communicate about billing.</li>
               <li>To detect, investigate, and fix technical problems.</li>
               <li>To protect the security of your account and prevent abuse (for example, rate-limiting repeated requests).</li>
@@ -97,7 +97,7 @@ export default function PrivacyPolicyPage() {
               <li><strong className="text-foreground">Plaid</strong> — to connect to and retrieve data from your bank accounts.</li>
               <li><strong className="text-foreground">Supabase</strong> — our database and authentication provider, which stores your account and financial data securely.</li>
               <li><strong className="text-foreground">Stripe</strong> — to process MoneyOS Plus subscription payments.</li>
-              <li><strong className="text-foreground">Anthropic</strong> — to generate MO's responses, only when a MoneyOS Plus subscriber actively uses the free-form chat feature.</li>
+              <li><strong className="text-foreground">Anthropic</strong> — to generate MO&apos;s responses, only when a MoneyOS Plus subscriber actively uses the free-form chat feature.</li>
               <li><strong className="text-foreground">Sentry</strong> — for error tracking and debugging.</li>
               <li><strong className="text-foreground">Vercel</strong> — our hosting provider.</li>
               <li><strong className="text-foreground">Upstash</strong> — used only to enforce rate limits (for example, to prevent abuse of our connection or chat features); it does not receive your financial data.</li>
@@ -114,11 +114,11 @@ export default function PrivacyPolicyPage() {
             </h2>
             <p className="mt-3">
               MoneyOS uses a small number of essential cookies to keep you securely signed in
-              between visits. We don't use advertising or tracking cookies, and we don't use
+              between visits. We don&apos;t use advertising or tracking cookies, and we don&apos;t use
               analytics tools that build a profile of your browsing behavior. When you connect a
               bank account or manage a subscription, Plaid and Stripe may set their own cookies as
-              part of completing that connection or checkout — those are governed by Plaid's and
-              Stripe's own privacy policies, not this one.
+              part of completing that connection or checkout — those are governed by Plaid&apos;s and
+              Stripe&apos;s own privacy policies, not this one.
             </p>
           </section>
 
@@ -138,7 +138,7 @@ export default function PrivacyPolicyPage() {
             <p className="mt-3">
               No method of storage or transmission is completely secure, and we cannot guarantee
               absolute security. We do not currently hold formal security certifications (such as
-              SOC 2 or ISO 27001); if that changes, we'll update this section.
+              SOC 2 or ISO 27001); if that changes, we&apos;ll update this section.
             </p>
           </section>
 
@@ -175,7 +175,7 @@ export default function PrivacyPolicyPage() {
             <p className="mt-3">
               <strong className="text-foreground">Disconnecting a bank.</strong> You can disconnect
               any connected bank account at any time from the Accounts screen. This removes that
-              account's transaction history and revokes MoneyOS's access with Plaid immediately.
+              account&apos;s transaction history and revokes MoneyOS&apos;s access with Plaid immediately.
             </p>
             <p className="mt-3">
               <strong className="text-foreground">Account deletion.</strong> You can permanently
@@ -194,7 +194,7 @@ export default function PrivacyPolicyPage() {
             </p>
             <p className="mt-3">
               If you are a California resident, you may have additional rights under the California
-              Consumer Privacy Act, including the right to know what personal information we've
+              Consumer Privacy Act, including the right to know what personal information we&apos;ve
               collected and to request its deletion. You can exercise these rights using the contact
               information below.
             </p>
@@ -202,7 +202,7 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <h2 className="font-heading text-xl font-semibold text-foreground">
-              9. Children's Privacy
+              9. Children&apos;s Privacy
             </h2>
             <p className="mt-3">
               MoneyOS is not directed at, and is not intended for use by, anyone under 18. We do not
@@ -216,7 +216,7 @@ export default function PrivacyPolicyPage() {
             </h2>
             <p className="mt-3">
               We may update this Privacy Policy from time to time. If we make material changes,
-              we'll update the effective date above and, where appropriate, notify you directly.
+              we&apos;ll update the effective date above and, where appropriate, notify you directly.
             </p>
           </section>
 

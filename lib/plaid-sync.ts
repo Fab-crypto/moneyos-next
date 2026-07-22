@@ -4,6 +4,7 @@ import { decryptToken } from "@/lib/crypto";
 import { refreshRecurringBills } from "@/lib/recurring";
 import { syncLoanDetails, recordLoanBalanceSnapshots } from "@/lib/loans";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Transaction as PlaidTransaction } from "plaid";
 
 interface PlaidItemRow {
   id: string;
@@ -29,7 +30,7 @@ function normalizeCategory(pfcPrimary: string | null | undefined): string {
 }
 
 export async function syncPlaidItemTransactions(
-  admin: SupabaseClient<any, "public", any>,
+  admin: SupabaseClient,
   userId: string,
   item: PlaidItemRow
 ): Promise<SyncResult> {
@@ -49,8 +50,8 @@ export async function syncPlaidItemTransactions(
 
     let cursor: string | undefined = item.cursor ?? undefined;
     let hasMore = true;
-    const added: any[] = [];
-    const modified: any[] = [];
+    const added: PlaidTransaction[] = [];
+    const modified: PlaidTransaction[] = [];
     const removed: { transaction_id: string }[] = [];
 
     while (hasMore) {

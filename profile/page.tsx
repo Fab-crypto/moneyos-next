@@ -256,7 +256,7 @@ function DeleteAccountCard() {
         <div>
           <p className="text-sm font-medium text-foreground">Delete your account?</p>
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            This permanently deletes your accounts, transactions, and goals. This can't be undone.
+            This permanently deletes your accounts, transactions, and goals. This can&apos;t be undone.
           </p>
           <div className="mt-4 flex gap-3">
             <button

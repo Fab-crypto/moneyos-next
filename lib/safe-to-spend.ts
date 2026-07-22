@@ -1,11 +1,22 @@
 import type { Transaction } from "@/types/finance";
 
-export function computeSafeToSpend(transactions: Transaction[], settings: any) {
+// Accepts the app Transaction shape plus the legacy fields (type/amount) some
+// older payloads still carry.
+type SafeToSpendTransaction = Transaction & { type?: string; amount?: number };
+
+interface SafeToSpendSettings {
+  monthlyBudget?: number | null;
+}
+
+export function computeSafeToSpend(
+  transactions: SafeToSpendTransaction[],
+  settings: SafeToSpendSettings | null | undefined
+) {
   const monthlyBudget = settings?.monthlyBudget ?? 320000;
 
   const spentThisMonth = transactions
-    .filter((t: any) => t.type === "expense" || t.amountCents < 0)
-    .reduce((sum: number, t: any) => sum + Math.abs(t.amountCents ?? t.amount ?? 0), 0);
+    .filter((t) => t.type === "expense" || t.amountCents < 0)
+    .reduce((sum, t) => sum + Math.abs(t.amountCents ?? t.amount ?? 0), 0);
 
   const safeToSpend = Math.max(0, monthlyBudget - spentThisMonth);
   const pctUsed = monthlyBudget > 0 ? spentThisMonth / monthlyBudget : 0;

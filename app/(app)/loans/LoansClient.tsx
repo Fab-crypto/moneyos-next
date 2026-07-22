@@ -184,8 +184,8 @@ export function LoansClient({ loans }: LoansClientProps) {
                           <div className="mt-4 space-y-2 border-t border-border/50 pt-4">
                             {loan.neverPaysOffAtCurrentPayment ? (
                               <p className="text-[13px] leading-relaxed text-muted-foreground">
-                                At the current minimum payment, this balance won't pay down — the
-                                payment doesn't cover the monthly interest.
+                                At the current minimum payment, this balance won&apos;t pay down — the
+                                payment doesn&apos;t cover the monthly interest.
                               </p>
                             ) : (
                               <>

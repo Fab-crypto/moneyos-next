@@ -220,7 +220,7 @@ export function MOClient({
 
               <p className="mt-3 text-[14px] leading-relaxed text-muted-foreground">
                 You have <span className="tabular font-medium text-foreground/90">${formatMoney(safeToSpendToday)}</span>{" "}
-                to spend today, and that's a comfortable place to be.
+                to spend today, and that&apos;s a comfortable place to be.
               </p>
             </MoneyCard>
           </motion.div>
@@ -253,7 +253,7 @@ export function MOClient({
           <motion.div variants={item}>
             <MoneyCard className="mt-8">
               <SectionHeader icon={Sparkles} iconClassName="gold-text" className="mb-2.5">
-                Today's Focus
+                Today&apos;s Focus
               </SectionHeader>
               <p className="text-[15px] leading-relaxed text-foreground">{todaysFocus}</p>
             </MoneyCard>

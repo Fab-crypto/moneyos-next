@@ -106,7 +106,7 @@ export function detectRecurringBills(transactions: TxInput[]): RecurringBillResu
 }
 
 export async function refreshRecurringBills(
-  admin: SupabaseClient<any, "public", any>,
+  admin: SupabaseClient,
   userId: string
 ): Promise<void> {
   const windowStart = new Date(Date.now() - RECURRING_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);

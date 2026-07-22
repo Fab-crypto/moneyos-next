@@ -21,7 +21,6 @@ import {
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MoneyButton } from "@/components/ui/MoneyButton";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { Toggle } from "@/components/ui/Toggle";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
@@ -304,6 +303,9 @@ function SettingsListCard({
   useEffect(() => {
     const saved = localStorage.getItem("moneyos_theme");
     const isLight = saved === "light";
+    // localStorage is unavailable during SSR, so the saved theme can only be
+    // applied post-mount; a lazy initializer would cause a hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDarkMode(!isLight);
     document.documentElement.classList.toggle("light", isLight);
   }, []);
@@ -660,7 +662,7 @@ function DeleteAccountCard() {
           <p className="text-sm font-medium text-foreground">Delete your account?</p>
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
             This permanently deletes your accounts, transactions, and goals, disconnects every bank
-            you've linked, and cancels any active subscription. This can't be undone.
+            you&apos;ve linked, and cancels any active subscription. This can&apos;t be undone.
           </p>
 
           <label className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">

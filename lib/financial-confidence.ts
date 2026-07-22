@@ -44,7 +44,7 @@ function computeScore({
 }
 
 export async function getFinancialConfidence(
-  supabase: SupabaseClient<any, "public", any>,
+  supabase: SupabaseClient,
   userId: string
 ): Promise<FinancialConfidenceResult> {
   const now = new Date();
@@ -134,7 +134,7 @@ export interface SafeToSpendHistoryPoint {
 }
 
 export async function getSafeToSpendHistory(
-  supabase: SupabaseClient<any, "public", any>,
+  supabase: SupabaseClient,
   userId: string,
   days: number = 7
 ): Promise<SafeToSpendHistoryPoint[]> {

@@ -14,8 +14,8 @@ export default function TermsOfServicePage() {
         <div className="mt-10 space-y-8 text-[15px] leading-relaxed text-foreground/90">
           <section>
             <p>
-              These Terms of Service ("Terms") govern your use of MoneyOS, operated by Fabian Oduk
-              ("MoneyOS," "we," "us," or "our"). By creating an account or using MoneyOS, you agree
+              These Terms of Service (&quot;Terms&quot;) govern your use of MoneyOS, operated by Fabian Oduk
+              (&quot;MoneyOS,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). By creating an account or using MoneyOS, you agree
               to these Terms. If you do not agree, do not use MoneyOS.
             </p>
           </section>
@@ -34,7 +34,7 @@ export default function TermsOfServicePage() {
               advisor, accountant, or law firm.</strong> Nothing in MoneyOS — including anything MO
               says, whether a suggested question or a free-form chat response — is financial,
               investment, tax, or legal advice. MO is an AI feature: its responses are
-              AI-generated, informational only, and may contain mistakes. MO's observations are
+              AI-generated, informational only, and may contain mistakes. MO&apos;s observations are
               general information based on your own data, not a personalized recommendation, and
               should not be your sole basis for any financial decision. Always verify anything
               important against your own bank or financial records, and consult a licensed
@@ -48,7 +48,7 @@ export default function TermsOfServicePage() {
             </h2>
             <p className="mt-3">
               You must be at least 18 years old and a resident of the United States to use
-              MoneyOS. You're responsible for keeping your login credentials secure and for all
+              MoneyOS. You&apos;re responsible for keeping your login credentials secure and for all
               activity under your account. You may not create an account on behalf of someone else
               without their permission, and each person may maintain only one account.
             </p>
@@ -62,7 +62,7 @@ export default function TermsOfServicePage() {
               MoneyOS uses Plaid to connect to your financial institutions. By connecting an
               account, you authorize MoneyOS to access and store the account and transaction data
               made available through that connection. You can disconnect any account at any time
-              from the Accounts screen, which revokes MoneyOS's access with Plaid. MoneyOS is not
+              from the Accounts screen, which revokes MoneyOS&apos;s access with Plaid. MoneyOS is not
               responsible for the accuracy of data provided by your financial institution or by
               Plaid, and you should always confirm important balances directly with your bank.
             </p>
@@ -76,12 +76,12 @@ export default function TermsOfServicePage() {
               MoneyOS Plus is an optional paid subscription that unlocks additional features,
               including free-form chat with MO. Subscriptions are billed monthly in advance through
               Stripe and renew automatically until canceled. You can cancel anytime from your
-              Profile page, which opens Stripe's billing portal; cancellation takes effect at the
+              Profile page, which opens Stripe&apos;s billing portal; cancellation takes effect at the
               end of your current billing period, and we do not provide refunds for partial billing
               periods already paid for.
             </p>
             <p className="mt-3">
-              We may change MoneyOS Plus's price or features going forward. If we do, we'll let you
+              We may change MoneyOS Plus&apos;s price or features going forward. If we do, we&apos;ll let you
               know before the change takes effect on your next billing cycle.
             </p>
           </section>
@@ -92,8 +92,8 @@ export default function TermsOfServicePage() {
             </h2>
             <p className="mt-3">You agree not to:</p>
             <ul className="mt-3 list-disc space-y-2 pl-5">
-              <li>Use MoneyOS for any unlawful purpose, or to connect accounts you're not authorized to access.</li>
-              <li>Attempt to interfere with, disrupt, or gain unauthorized access to MoneyOS's systems.</li>
+              <li>Use MoneyOS for any unlawful purpose, or to connect accounts you&apos;re not authorized to access.</li>
+              <li>Attempt to interfere with, disrupt, or gain unauthorized access to MoneyOS&apos;s systems.</li>
               <li>Use automated means to access MoneyOS in a way that could overload or abuse our systems or our third-party providers.</li>
               <li>Misrepresent your identity or impersonate another person.</li>
             </ul>
@@ -104,7 +104,7 @@ export default function TermsOfServicePage() {
               6. Disclaimers
             </h2>
             <p className="mt-3">
-              MoneyOS is provided "as is" and "as available," without warranties of any kind, express
+              MoneyOS is provided &quot;as is&quot; and &quot;as available,&quot; without warranties of any kind, express
               or implied. We do not guarantee that MoneyOS will be uninterrupted, error-free, or
               that data from Plaid, Stripe, Anthropic, or any other third-party service will always
               be accurate or available. MoneyOS relies on these third-party services to function,
@@ -120,7 +120,7 @@ export default function TermsOfServicePage() {
               To the fullest extent permitted by law, MoneyOS and Fabian Oduk will not be liable for
               any indirect, incidental, special, or consequential damages, or for any loss of
               profits, data, or financial loss, arising from your use of or inability to use
-              MoneyOS, even if we've been advised of the possibility of such damages. Our total
+              MoneyOS, even if we&apos;ve been advised of the possibility of such damages. Our total
               liability for any claim relating to MoneyOS will not exceed the amount you paid us, if
               any, in the 12 months before the claim arose.
             </p>
@@ -135,7 +135,7 @@ export default function TermsOfServicePage() {
               <a href="/privacy" className="gold-text underline">
                 Privacy Policy
               </a>{" "}
-              for how). We may suspend or terminate your access if we reasonably believe you've
+              for how). We may suspend or terminate your access if we reasonably believe you&apos;ve
               violated these Terms.
             </p>
           </section>
@@ -157,7 +157,7 @@ export default function TermsOfServicePage() {
               10. Changes to These Terms
             </h2>
             <p className="mt-3">
-              We may update these Terms from time to time. If we make material changes, we'll update
+              We may update these Terms from time to time. If we make material changes, we&apos;ll update
               the effective date above and, where appropriate, notify you directly. Continued use of
               MoneyOS after changes take effect means you accept the updated Terms.
             </p>

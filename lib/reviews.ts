@@ -74,7 +74,7 @@ export interface ReviewSnapshot<T> {
 }
 
 export async function getOrCreateWeeklyReview(
-  supabase: SupabaseClient<any, "public", any>,
+  supabase: SupabaseClient,
   userId: string
 ): Promise<ReviewSnapshot<WeeklyReviewData> | null> {
   const { start, end } = getLastCompletedWeekRange();
@@ -191,7 +191,7 @@ export async function getOrCreateWeeklyReview(
 }
 
 export async function getOrCreateMonthlyStory(
-  supabase: SupabaseClient<any, "public", any>,
+  supabase: SupabaseClient,
   userId: string
 ): Promise<ReviewSnapshot<MonthlyStoryData> | null> {
   const { start, end } = getLastCompletedMonthRange();
