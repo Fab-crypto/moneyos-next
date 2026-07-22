@@ -80,7 +80,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name, last_greeting_shown_date, monthly_income")
+      .select("full_name, last_greeting_shown_date, monthly_income, onboarding_completed_at")
       .eq("id", user.id)
       .single(),
     supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
@@ -120,6 +120,12 @@ export default async function DashboardPage() {
       .gte("date", daysAgo(13)),
     getFinancialConfidence(supabase, user.id),
   ]);
+
+  // Route anyone who hasn't finished onboarding (including accounts that
+  // predate it) through the flow once; it marks completion and comes back.
+  if (!profileResult.data?.onboarding_completed_at) {
+    redirect("/onboarding");
+  }
 
   const name = profileResult.data?.full_name?.trim().split(" ")[0];
   const firstName = name || user.email?.split("@")[0] || "there";
