@@ -354,20 +354,19 @@ export function DashboardClient({
 }
 
 function HeroAmount({ value, reduceMotion }: { value: number; reduceMotion: boolean }) {
-  const [display, setDisplay] = useState(reduceMotion ? value : 0);
+  const [display, setDisplay] = useState(0);
 
   useEffect(() => {
-    if (reduceMotion) {
-      setDisplay(value);
-      return;
-    }
+    if (reduceMotion) return;
     const controls = animate(0, value, { duration: 0.9, ease: EASE, onUpdate: setDisplay });
     return controls.stop;
   }, [value, reduceMotion]);
 
+  const shown = reduceMotion ? value : display;
+
   return (
     <p className="tabular mt-4 font-heading text-[76px] font-bold leading-none tracking-[-0.03em] text-foreground">
-      ${display.toFixed(2)}
+      ${shown.toFixed(2)}
     </p>
   );
 }
