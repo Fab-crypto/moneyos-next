@@ -2,12 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Check } from "lucide-react";
 import { MoneyButton } from "@/components/ui/MoneyButton";
 import { MoneyCard } from "@/components/ui/MoneyCard";
 import { Chip } from "@/components/ui/Chip";
-import { EASE, SHELL_WIDTH, FINANCIAL_CONFIDENCE } from "@/lib/constants";
+import { SHELL_WIDTH, FINANCIAL_CONFIDENCE } from "@/lib/constants";
 import { enablePushNotifications } from "@/lib/push-client";
 
 const FEELINGS = [
@@ -132,23 +131,14 @@ export function OnboardingClient({ firstName, initialFeeling, initialGoals, chec
             <ArrowLeft size={18} />
           </button>
           <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-muted">
-            <motion.div
-              className="h-full rounded-full bg-foreground"
-              animate={{ width: `${((step + 1) / TOTAL_STEPS) * 100}%` }}
-              transition={{ duration: 0.4, ease: EASE }}
+            <div
+              className="h-full rounded-full bg-foreground transition-[width] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              style={{ width: `${((step + 1) / TOTAL_STEPS) * 100}%` }}
             />
           </div>
         </div>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.45, ease: EASE }}
-            className="flex flex-1 flex-col"
-          >
+        <div key={step} className="animate-step-in flex flex-1 flex-col">
             {step === 0 && (
               <StepShell
                 title={firstName ? `Welcome, ${firstName}.` : "Welcome."}
@@ -337,8 +327,7 @@ export function OnboardingClient({ firstName, initialFeeling, initialGoals, chec
                 </MoneyButton>
               </StepShell>
             )}
-          </motion.div>
-        </AnimatePresence>
+        </div>
       </div>
     </div>
   );
