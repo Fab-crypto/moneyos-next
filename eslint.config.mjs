@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Native iOS wrapper: Xcode build artifacts and vendored Capacitor JS.
+    "ios/**",
   ]),
 ]);
 
