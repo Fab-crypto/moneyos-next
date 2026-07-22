@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
+import { AppleIcon } from "@/components/ui/AppleIcon";
 import { EASE } from "@/lib/constants";
 
 
@@ -21,6 +22,7 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -84,6 +86,24 @@ export default function SignupPage() {
     }
   }
 
+  async function handleAppleSignIn() {
+    setError(null);
+    setAppleLoading(true);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "apple",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+      },
+    });
+
+    if (error) {
+      console.error("[signup] Apple sign-in failed:", error);
+      setError("Apple sign-in failed. Please try again.");
+      setAppleLoading(false);
+    }
+  }
+
   if (checkingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -115,9 +135,19 @@ export default function SignupPage() {
         >
           <button
             type="button"
+            onClick={handleAppleSignIn}
+            disabled={appleLoading || googleLoading || submitting}
+            className="flex h-14 w-full items-center justify-center gap-3 rounded-xl border border-border/60 bg-black text-[15px] font-medium text-white transition-opacity disabled:opacity-50 [@media(hover:hover)]:hover:opacity-90"
+          >
+            <AppleIcon />
+            {appleLoading ? "Redirecting..." : "Continue with Apple"}
+          </button>
+
+          <button
+            type="button"
             onClick={handleGoogleSignIn}
-            disabled={googleLoading || submitting}
-            className="flex h-14 w-full items-center justify-center gap-3 rounded-xl bg-white text-[15px] font-medium text-black transition-opacity disabled:opacity-50 [@media(hover:hover)]:hover:opacity-90"
+            disabled={googleLoading || appleLoading || submitting}
+            className="mt-3 flex h-14 w-full items-center justify-center gap-3 rounded-xl bg-white text-[15px] font-medium text-black transition-opacity disabled:opacity-50 [@media(hover:hover)]:hover:opacity-90"
           >
             <GoogleIcon />
             {googleLoading ? "Redirecting..." : "Continue with Google"}
@@ -199,7 +229,7 @@ export default function SignupPage() {
           <div className="mt-auto flex flex-col gap-3 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-10">
             <button
               type="submit"
-              disabled={submitting || googleLoading}
+              disabled={submitting || googleLoading || appleLoading}
               className="flex h-14 items-center justify-center gap-2 rounded-xl bg-foreground text-[15px] font-medium text-background transition-opacity hover:opacity-90 active:opacity-80 disabled:opacity-50"
             >
               {submitting && <Loader2 size={16} className="animate-spin" />}

@@ -4,12 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
+import { AppleIcon } from "@/components/ui/AppleIcon";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -51,6 +53,24 @@ export default function LoginPage() {
     }
   }
 
+  async function handleAppleSignIn() {
+    setAppleLoading(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "apple",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+      },
+    });
+
+    if (error) {
+      console.error("[login] Apple sign-in failed:", error);
+      setMessage("Apple sign-in failed. Please try again.");
+      setAppleLoading(false);
+    }
+  }
+
   async function handlePasskeySignIn() {
     setPasskeyLoading(true);
     setMessage("");
@@ -86,7 +106,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={handlePasskeySignIn}
-            disabled={passkeyLoading || loading || googleLoading}
+            disabled={passkeyLoading || loading || googleLoading || appleLoading}
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-zinc-700 bg-zinc-800 py-4 font-semibold text-white transition-opacity disabled:opacity-50"
           >
             {passkeyLoading ? "Waiting for passkey..." : "Sign in with a passkey"}
@@ -94,8 +114,18 @@ export default function LoginPage() {
 
           <button
             type="button"
+            onClick={handleAppleSignIn}
+            disabled={appleLoading || loading || googleLoading || passkeyLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-xl bg-black border border-zinc-700 py-4 font-semibold text-white transition-opacity disabled:opacity-50"
+          >
+            <AppleIcon />
+            {appleLoading ? "Redirecting..." : "Continue with Apple"}
+          </button>
+
+          <button
+            type="button"
             onClick={handleGoogleSignIn}
-            disabled={googleLoading || loading || passkeyLoading}
+            disabled={googleLoading || loading || passkeyLoading || appleLoading}
             className="flex w-full items-center justify-center gap-3 rounded-xl bg-white py-4 font-semibold text-black transition-opacity disabled:opacity-50"
           >
             <GoogleIcon />
@@ -149,7 +179,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading || googleLoading}
+              disabled={loading || googleLoading || appleLoading || passkeyLoading}
               className="w-full rounded-xl bg-white text-black py-4 font-semibold disabled:opacity-50"
             >
               {loading ? "Signing In..." : "Sign In"}
