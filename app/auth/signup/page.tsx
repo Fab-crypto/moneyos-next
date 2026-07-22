@@ -61,7 +61,7 @@ export default function SignupPage() {
     }
 
     if (data.session) {
-      router.push("/dashboard");
+      router.push("/onboarding");
       router.refresh();
     } else {
       setError("Check your email to confirm your account before signing in.");
