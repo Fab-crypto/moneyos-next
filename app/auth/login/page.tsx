@@ -3,10 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { checkMfaStepUpRequired } from "@/lib/auth-mfa";
+import { MfaVerifyForm } from "@/components/auth/MfaVerifyForm";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 import { AppleIcon } from "@/components/ui/AppleIcon";
 
 export default function LoginPage() {
+  const [stage, setStage] = useState<"form" | "mfa">("form");
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -14,6 +20,26 @@ export default function LoginPage() {
   const [appleLoading, setAppleLoading] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  // Sign-in never elevates a session past AAL1 on its own - Supabase only
+  // gets there via a factor challenge. So an account with a verified TOTP
+  // factor needs that challenge completed here before we hand out /dashboard,
+  // otherwise the "second factor" is opt-in in name only.
+  async function completeSignIn() {
+    const stepUp = await checkMfaStepUpRequired();
+
+    if (stepUp.required) {
+      setLoading(false);
+      setPasskeyLoading(false);
+      setMfaFactorId(stepUp.factorId);
+      setMfaError(stepUp.error);
+      setStage("mfa");
+      return;
+    }
+
+    setMessage("Signed in. Redirecting...");
+    window.location.href = "/dashboard";
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,8 +57,7 @@ export default function LoginPage() {
       return;
     }
 
-    setMessage("Signed in. Redirecting...");
-    window.location.href = "/dashboard";
+    await completeSignIn();
   }
 
   async function handleGoogleSignIn() {
@@ -87,8 +112,20 @@ export default function LoginPage() {
       return;
     }
 
-    setMessage("Signed in. Redirecting...");
-    window.location.href = "/dashboard";
+    await completeSignIn();
+  }
+
+  if (stage === "mfa") {
+    return (
+      <MfaVerifyForm
+        factorId={mfaFactorId}
+        initialError={mfaError}
+        subtitle="Enter the code from your authenticator app to finish signing in."
+        onVerified={() => {
+          window.location.href = "/dashboard";
+        }}
+      />
+    );
   }
 
   return (
