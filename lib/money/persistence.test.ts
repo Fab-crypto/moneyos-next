@@ -2,18 +2,28 @@ import { describe, it, expect, afterEach } from "vitest";
 import { moneyField, currencyFields, moneyFromExternal, isMoneyDualWriteEnabled } from "./persistence";
 
 const original = process.env.MONEY_DUAL_WRITE;
+const originalPublic = process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE;
 afterEach(() => {
   if (original === undefined) delete process.env.MONEY_DUAL_WRITE;
   else process.env.MONEY_DUAL_WRITE = original;
+  if (originalPublic === undefined) delete process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE;
+  else process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE = originalPublic;
 });
 
 describe("dual-write flag", () => {
   it("is off unless explicitly enabled", () => {
     delete process.env.MONEY_DUAL_WRITE;
+    delete process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE;
     expect(isMoneyDualWriteEnabled()).toBe(false);
     process.env.MONEY_DUAL_WRITE = "false";
     expect(isMoneyDualWriteEnabled()).toBe(false);
     process.env.MONEY_DUAL_WRITE = "true";
+    expect(isMoneyDualWriteEnabled()).toBe(true);
+  });
+
+  it("is enabled by the client (NEXT_PUBLIC) flag too, for client-side writes", () => {
+    delete process.env.MONEY_DUAL_WRITE;
+    process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE = "true";
     expect(isMoneyDualWriteEnabled()).toBe(true);
   });
 });

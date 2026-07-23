@@ -12,7 +12,10 @@ import { getCurrency, isSupportedCurrency } from "./currencies";
  * change until the later cutover phase.
  */
 export function isMoneyDualWriteEnabled(): boolean {
-  return process.env.MONEY_DUAL_WRITE === "true";
+  // Checked on both server (MONEY_DUAL_WRITE) and client
+  // (NEXT_PUBLIC_MONEY_DUAL_WRITE), since money is written from both. Set both
+  // env vars together when enabling dual-write after the migration lands.
+  return process.env.MONEY_DUAL_WRITE === "true" || process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE === "true";
 }
 
 /**

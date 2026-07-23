@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { moneyField, currencyFields } from "@/lib/money/persistence";
 
 export interface FinancialConfidenceResult {
   score: number;
@@ -113,7 +114,13 @@ export async function getFinancialConfidence(
   const priorSnapshot = snapshots.find((s) => s.snapshot_date !== today);
 
   await supabase.from("financial_confidence_snapshots").upsert(
-    { user_id: userId, score, safe_to_spend: safeToSpend, snapshot_date: today },
+    {
+      user_id: userId,
+      score,
+      ...moneyField("safe_to_spend", safeToSpend, "USD"),
+      ...currencyFields("USD"),
+      snapshot_date: today,
+    },
     { onConflict: "user_id,snapshot_date" }
   );
 

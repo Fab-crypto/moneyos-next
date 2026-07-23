@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptToken } from "@/lib/crypto";
 import { syncPlaidItemTransactions } from "@/lib/plaid-sync";
+import { moneyField, currencyFields } from "@/lib/money/persistence";
 
 interface ExchangeRequestBody {
   public_token: string;
@@ -226,20 +227,24 @@ export async function POST(request: Request) {
   }
 
   try {
-    const accountRows = plaidAccounts.map((account) => ({
-      user_id: user.id,
-      plaid_item_id: plaidItemRowId,
-      institution_id: institutionId,
-      plaid_account_id: account.account_id,
-      name: account.name,
-      official_name: account.official_name,
-      mask: account.mask,
-      type: account.type,
-      subtype: account.subtype,
-      current_balance: account.balances.current ?? 0,
-      available_balance: account.balances.available,
-      currency: account.balances.iso_currency_code ?? "USD",
-    }));
+    const accountRows = plaidAccounts.map((account) => {
+      const currency = account.balances.iso_currency_code ?? "USD";
+      return {
+        user_id: user.id,
+        plaid_item_id: plaidItemRowId,
+        institution_id: institutionId,
+        plaid_account_id: account.account_id,
+        name: account.name,
+        official_name: account.official_name,
+        mask: account.mask,
+        type: account.type,
+        subtype: account.subtype,
+        ...moneyField("current_balance", account.balances.current ?? 0, currency),
+        ...moneyField("available_balance", account.balances.available, currency),
+        ...currencyFields(currency),
+        currency,
+      };
+    });
 
     const { error: accountsError } = await admin
       .from("accounts")

@@ -25,6 +25,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { supabase } from "@/lib/supabase";
+import { moneyField, currencyFields } from "@/lib/money/persistence";
 
 interface ConnectedBank {
   id: string;
@@ -178,7 +179,7 @@ function MonthlyIncomeCard({ initialValue }: { initialValue: number | null }) {
 
     const { error: updateError } = await supabase
       .from("profiles")
-      .update({ monthly_income: parsed })
+      .update({ ...moneyField("monthly_income", parsed, "USD"), ...currencyFields("USD") })
       .eq("id", user.id);
 
     if (updateError) {
