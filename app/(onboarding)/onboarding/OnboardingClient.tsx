@@ -53,9 +53,10 @@ interface OnboardingClientProps {
   initialFeeling: string | null;
   initialGoals: string[];
   checkout: "success" | "cancelled" | null;
+  hasPlus: boolean;
 }
 
-export function OnboardingClient({ firstName, initialFeeling, initialGoals, checkout }: OnboardingClientProps) {
+export function OnboardingClient({ firstName, initialFeeling, initialGoals, checkout, hasPlus }: OnboardingClientProps) {
   const router = useRouter();
 
   const [step, setStep] = useState(checkout === "success" ? 5 : checkout === "cancelled" ? 4 : 0);
@@ -123,7 +124,7 @@ export function OnboardingClient({ firstName, initialFeeling, initialGoals, chec
           <button
             type="button"
             aria-label="Back"
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            onClick={() => setStep((s) => (hasPlus && s === 5 ? 3 : Math.max(0, s - 1)))}
             className={`-ml-2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-opacity hover:text-foreground ${
               showBack ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
@@ -227,7 +228,7 @@ export function OnboardingClient({ firstName, initialFeeling, initialGoals, chec
                 <p className="mb-8 text-[14px] leading-relaxed text-muted-foreground">
                   Once you connect a bank, this becomes yours — real, private, and updated gently in the background.
                 </p>
-                <MoneyButton onClick={() => setStep(4)}>Continue</MoneyButton>
+                <MoneyButton onClick={() => setStep(hasPlus ? 5 : 4)}>Continue</MoneyButton>
               </StepShell>
             )}
 
@@ -294,7 +295,9 @@ export function OnboardingClient({ firstName, initialFeeling, initialGoals, chec
                 subtitle={
                   plusJoined
                     ? "Plus is active — welcome. One last thing: MoneyOS can nudge you softly, and never more than that."
-                    : "MoneyOS can nudge you softly, and never more than that."
+                    : hasPlus
+                      ? "You already have Plus, so there's nothing to buy here. Just one choice: MoneyOS can nudge you softly, and never more than that."
+                      : "MoneyOS can nudge you softly, and never more than that."
                 }
               >
                 <ul className="mb-8 flex flex-col gap-2.5">

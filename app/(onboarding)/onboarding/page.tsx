@@ -16,11 +16,14 @@ export default async function OnboardingPage({
     redirect("/welcome");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, money_feeling, calm_goals, onboarding_completed_at")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { data: subscription }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name, money_feeling, calm_goals, onboarding_completed_at")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase.from("subscriptions").select("status").eq("user_id", user.id).maybeSingle(),
+  ]);
 
   if (profile?.onboarding_completed_at) {
     redirect("/dashboard");
@@ -37,6 +40,7 @@ export default async function OnboardingPage({
       initialFeeling={profile?.money_feeling ?? null}
       initialGoals={profile?.calm_goals ?? []}
       checkout={checkout}
+      hasPlus={subscription?.status === "active" || subscription?.status === "trialing"}
     />
   );
 }
