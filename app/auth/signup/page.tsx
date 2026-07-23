@@ -51,7 +51,15 @@ export default function SignupPage() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: name } },
+      options: {
+        data: { full_name: name },
+        // This project requires email confirmation, so signUp() returns no
+        // session - the user confirms via the emailed link first. Route that
+        // link through /auth/callback so it lands in onboarding (via the same
+        // MFA/onboarding-gated path every other sign-in uses) instead of the
+        // project's default Site URL.
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
+      },
     });
     setSubmitting(false);
 
