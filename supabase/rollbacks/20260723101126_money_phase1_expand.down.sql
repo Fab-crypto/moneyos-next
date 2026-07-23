@@ -22,6 +22,9 @@ alter table public.budgets                        drop constraint if exists budg
 alter table public.financial_confidence_snapshots drop constraint if exists fcs_currency_fk;
 alter table public.profiles                       drop constraint if exists profiles_currency_fk;
 alter table public.loan_details                   drop constraint if exists loan_details_currency_fk;
+alter table public.loan_balance_snapshots         drop constraint if exists loan_balance_snapshots_currency_fk;
+alter table public.subscription_price_history     drop constraint if exists subscription_price_history_currency_fk;
+alter table public.net_worth_snapshots            drop constraint if exists net_worth_snapshots_currency_fk;
 
 alter table public.accounts
   drop column if exists current_balance_minor,
@@ -54,6 +57,17 @@ alter table public.loan_details
   drop column if exists origination_principal_amount_minor,
   drop column if exists ytd_interest_paid_minor,
   drop column if exists ytd_principal_paid_minor,
+  drop column if exists currency_code, drop column if exists scale;
+
+alter table public.loan_balance_snapshots
+  drop column if exists balance_minor, drop column if exists currency_code, drop column if exists scale;
+
+alter table public.subscription_price_history
+  drop column if exists amount_minor, drop column if exists currency_code, drop column if exists scale;
+
+alter table public.net_worth_snapshots
+  drop column if exists total_balance_minor, drop column if exists cash_minor, drop column if exists savings_minor,
+  drop column if exists investments_minor, drop column if exists debt_minor,
   drop column if exists currency_code, drop column if exists scale;
 
 drop table if exists public.currencies;

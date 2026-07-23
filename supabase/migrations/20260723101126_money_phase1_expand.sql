@@ -114,6 +114,25 @@ alter table public.loan_details
   add column if not exists ytd_interest_paid_minor bigint,
   add column if not exists ytd_principal_paid_minor bigint;
 
+alter table public.loan_balance_snapshots
+  add column if not exists currency_code text,
+  add column if not exists scale smallint,
+  add column if not exists balance_minor bigint;
+
+alter table public.subscription_price_history
+  add column if not exists currency_code text,
+  add column if not exists scale smallint,
+  add column if not exists amount_minor bigint;
+
+alter table public.net_worth_snapshots
+  add column if not exists currency_code text,
+  add column if not exists scale smallint,
+  add column if not exists total_balance_minor bigint,
+  add column if not exists cash_minor bigint,
+  add column if not exists savings_minor bigint,
+  add column if not exists investments_minor bigint,
+  add column if not exists debt_minor bigint;
+
 -- ── 3. Backfill currency_code, then scale, then the minor-unit values ───────
 -- currency_code: preserve the existing per-row currency where the table has
 -- one (accounts/transactions/profiles); otherwise 'USD' — verified correct,
@@ -126,6 +145,9 @@ update public.goals                           set currency_code = 'USD' where cu
 update public.budgets                         set currency_code = 'USD' where currency_code is null;
 update public.financial_confidence_snapshots  set currency_code = 'USD' where currency_code is null;
 update public.loan_details                    set currency_code = 'USD' where currency_code is null;
+update public.loan_balance_snapshots          set currency_code = 'USD' where currency_code is null;
+update public.subscription_price_history      set currency_code = 'USD' where currency_code is null;
+update public.net_worth_snapshots             set currency_code = 'USD' where currency_code is null;
 
 -- scale: always taken from the registry, never hardcoded, so it matches the
 -- currency by construction.
@@ -137,6 +159,9 @@ update public.budgets      b set scale = c.scale from public.currencies c where 
 update public.financial_confidence_snapshots f set scale = c.scale from public.currencies c where c.code = f.currency_code and f.scale is null;
 update public.profiles     p set scale = c.scale from public.currencies c where c.code = p.currency_code and p.scale is null;
 update public.loan_details l set scale = c.scale from public.currencies c where c.code = l.currency_code and l.scale is null;
+update public.loan_balance_snapshots s set scale = c.scale from public.currencies c where c.code = s.currency_code and s.scale is null;
+update public.subscription_price_history h set scale = c.scale from public.currencies c where c.code = h.currency_code and h.scale is null;
+update public.net_worth_snapshots n set scale = c.scale from public.currencies c where c.code = n.currency_code and n.scale is null;
 
 -- minor units: round(value * 10^scale). 10^scale is computed with numeric
 -- exponentiation (10::numeric ^ scale) — exact, never floating point. NULL
@@ -179,6 +204,22 @@ update public.loan_details set
   ytd_principal_paid_minor           = case when ytd_principal_paid           is null then null else round(ytd_principal_paid           * (10::numeric ^ scale))::bigint end
   where last_payment_amount_minor is null;
 
+update public.loan_balance_snapshots set
+  balance_minor = case when balance is null then null else round(balance * (10::numeric ^ scale))::bigint end
+  where balance_minor is null;
+
+update public.subscription_price_history set
+  amount_minor = case when amount is null then null else round(amount * (10::numeric ^ scale))::bigint end
+  where amount_minor is null;
+
+update public.net_worth_snapshots set
+  total_balance_minor = case when total_balance is null then null else round(total_balance * (10::numeric ^ scale))::bigint end,
+  cash_minor          = case when cash          is null then null else round(cash          * (10::numeric ^ scale))::bigint end,
+  savings_minor       = case when savings       is null then null else round(savings       * (10::numeric ^ scale))::bigint end,
+  investments_minor   = case when investments   is null then null else round(investments   * (10::numeric ^ scale))::bigint end,
+  debt_minor          = case when debt          is null then null else round(debt          * (10::numeric ^ scale))::bigint end
+  where total_balance_minor is null;
+
 -- ── 4. Enforce currency/scale integrity with composite FKs ──────────────────
 -- (currency_code, scale) must exist in the registry: a row can never claim a
 -- scale its currency doesn't have.
@@ -190,39 +231,76 @@ alter table public.budgets                      add constraint budgets_currency_
 alter table public.financial_confidence_snapshots add constraint fcs_currency_fk                        foreign key (currency_code, scale) references public.currencies (code, scale);
 alter table public.profiles                     add constraint profiles_currency_fk                     foreign key (currency_code, scale) references public.currencies (code, scale);
 alter table public.loan_details                 add constraint loan_details_currency_fk                 foreign key (currency_code, scale) references public.currencies (code, scale);
+alter table public.loan_balance_snapshots       add constraint loan_balance_snapshots_currency_fk       foreign key (currency_code, scale) references public.currencies (code, scale);
+alter table public.subscription_price_history   add constraint subscription_price_history_currency_fk   foreign key (currency_code, scale) references public.currencies (code, scale);
+alter table public.net_worth_snapshots          add constraint net_worth_snapshots_currency_fk          foreign key (currency_code, scale) references public.currencies (code, scale);
 
--- ── 5. Self-verify: re-derive every total from the untouched source columns.
--- If a single minor-unit sum fails to reconcile with value*10^scale, the whole
--- transaction aborts. This is the "verify totals before and after" gate.
+-- ── 5. Self-verify every backfilled column, per row, against its source.
+-- Two hard gates (either aborts the whole transaction):
+--   (a) completeness — no row may have a non-null money value but a null minor
+--       unit (nothing silently dropped);
+--   (b) correctness — every minor unit must equal round(value * 10^scale)
+--       (nothing mis-computed).
+-- Separately REPORTED, not fatal: rows whose stored value carried more
+-- precision than the currency's scale (pre-existing floating-point artifacts,
+-- e.g. 89.40000000000002) are rounded to the exact minor unit — the very
+-- corruption this migration removes. We surface the count as an audit trail
+-- rather than abort, because rounding them is the intended, correct outcome.
 do $$
 declare
-  mismatches text := '';
-  procedure_check record;
+  fld record;
+  incomplete bigint;
+  wrong bigint;
+  cleaned bigint;
+  cleaned_total bigint := 0;
 begin
-  for procedure_check in
+  for fld in
     select * from (values
-      ('accounts.current_balance',   (select coalesce(sum(current_balance_minor),0)   from public.accounts where current_balance is not null),   (select coalesce(round(sum(current_balance   * (10::numeric ^ scale))),0) from public.accounts where current_balance is not null)),
-      ('accounts.available_balance', (select coalesce(sum(available_balance_minor),0) from public.accounts where available_balance is not null), (select coalesce(round(sum(available_balance * (10::numeric ^ scale))),0) from public.accounts where available_balance is not null)),
-      ('transactions.amount',        (select coalesce(sum(amount_minor),0) from public.transactions where amount is not null), (select coalesce(round(sum(amount * (10::numeric ^ scale))),0) from public.transactions where amount is not null)),
-      ('recurring_transactions.amount', (select coalesce(sum(amount_minor),0) from public.recurring_transactions where amount is not null), (select coalesce(round(sum(amount * (10::numeric ^ scale))),0) from public.recurring_transactions where amount is not null)),
-      ('goals.current_amount',       (select coalesce(sum(current_amount_minor),0) from public.goals where current_amount is not null), (select coalesce(round(sum(current_amount * (10::numeric ^ scale))),0) from public.goals where current_amount is not null)),
-      ('goals.target_amount',        (select coalesce(sum(target_amount_minor),0) from public.goals where target_amount is not null), (select coalesce(round(sum(target_amount * (10::numeric ^ scale))),0) from public.goals where target_amount is not null)),
-      ('budgets.amount',             (select coalesce(sum(amount_minor),0) from public.budgets where amount is not null), (select coalesce(round(sum(amount * (10::numeric ^ scale))),0) from public.budgets where amount is not null)),
-      ('financial_confidence_snapshots.safe_to_spend', (select coalesce(sum(safe_to_spend_minor),0) from public.financial_confidence_snapshots where safe_to_spend is not null), (select coalesce(round(sum(safe_to_spend * (10::numeric ^ scale))),0) from public.financial_confidence_snapshots where safe_to_spend is not null)),
-      ('profiles.monthly_income',    (select coalesce(sum(monthly_income_minor),0) from public.profiles where monthly_income is not null), (select coalesce(round(sum(monthly_income * (10::numeric ^ scale))),0) from public.profiles where monthly_income is not null)),
-      ('loan_details.last_payment_amount', (select coalesce(sum(last_payment_amount_minor),0) from public.loan_details where last_payment_amount is not null), (select coalesce(round(sum(last_payment_amount * (10::numeric ^ scale))),0) from public.loan_details where last_payment_amount is not null))
-    ) as t(label, got numeric, expected numeric)
+      ('accounts','current_balance','current_balance_minor'),
+      ('accounts','available_balance','available_balance_minor'),
+      ('transactions','amount','amount_minor'),
+      ('recurring_transactions','amount','amount_minor'),
+      ('goals','current_amount','current_amount_minor'),
+      ('goals','target_amount','target_amount_minor'),
+      ('budgets','amount','amount_minor'),
+      ('financial_confidence_snapshots','safe_to_spend','safe_to_spend_minor'),
+      ('profiles','monthly_income','monthly_income_minor'),
+      ('loan_details','last_payment_amount','last_payment_amount_minor'),
+      ('loan_details','minimum_payment_amount','minimum_payment_amount_minor'),
+      ('loan_details','origination_principal_amount','origination_principal_amount_minor'),
+      ('loan_details','ytd_interest_paid','ytd_interest_paid_minor'),
+      ('loan_details','ytd_principal_paid','ytd_principal_paid_minor'),
+      ('loan_balance_snapshots','balance','balance_minor'),
+      ('subscription_price_history','amount','amount_minor'),
+      ('net_worth_snapshots','total_balance','total_balance_minor'),
+      ('net_worth_snapshots','cash','cash_minor'),
+      ('net_worth_snapshots','savings','savings_minor'),
+      ('net_worth_snapshots','investments','investments_minor'),
+      ('net_worth_snapshots','debt','debt_minor')
+    ) as t(tbl, vcol, mcol)
   loop
-    if procedure_check.got <> procedure_check.expected then
-      mismatches := mismatches || format('  %s: minor sum %s <> expected %s%s', procedure_check.label, procedure_check.got, procedure_check.expected, chr(10));
+    execute format(
+      'select
+         count(*) filter (where %2$I is not null and %3$I is null),
+         count(*) filter (where %2$I is not null and %3$I <> round(%2$I * (10::numeric ^ scale))::bigint),
+         count(*) filter (where %2$I is not null and round(%2$I * (10::numeric ^ scale)) <> %2$I * (10::numeric ^ scale))
+       from public.%1$I',
+      fld.tbl, fld.vcol, fld.mcol
+    ) into incomplete, wrong, cleaned;
+
+    if incomplete > 0 then
+      raise exception 'Money Phase 1 FAILED: %.% has % row(s) with a value but no minor unit', fld.tbl, fld.vcol, incomplete;
+    end if;
+    if wrong > 0 then
+      raise exception 'Money Phase 1 FAILED: %.% has % row(s) where minor <> round(value * 10^scale)', fld.tbl, fld.vcol, wrong;
+    end if;
+    if cleaned > 0 then
+      cleaned_total := cleaned_total + cleaned;
+      raise notice 'Money Phase 1: %.% rounded % pre-existing sub-scale value(s) to exact minor units.', fld.tbl, fld.vcol, cleaned;
     end if;
   end loop;
 
-  if mismatches <> '' then
-    raise exception E'Money Phase 1 backfill reconciliation FAILED — aborting:\n%', mismatches;
-  end if;
-
-  raise notice 'Money Phase 1 backfill reconciled cleanly across all money tables.';
+  raise notice 'Money Phase 1 verification passed. % value(s) had sub-scale precision cleaned to exact minor units.', cleaned_total;
 end $$;
 
 commit;
