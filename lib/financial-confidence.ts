@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { sumRows } from "@/lib/money/read";
 
 export interface FinancialConfidenceResult {
   score: number;
@@ -57,22 +58,25 @@ export async function getFinancialConfidence(
 
   const [accountsResult, expenseResult, recentExpenseResult, billsResult, snapshotsResult] =
     await Promise.all([
-      supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
+      supabase
+        .from("accounts")
+        .select("current_balance, current_balance_minor, currency_code, type, subtype")
+        .eq("is_active", true),
       supabase
         .from("transactions")
-        .select("amount, date")
+        .select("amount, amount_minor, currency_code, date")
         .eq("is_removed", false)
         .eq("type", "expense")
         .gte("date", startOfLastMonth),
       supabase
         .from("transactions")
-        .select("amount, date")
+        .select("amount, amount_minor, currency_code, date")
         .eq("is_removed", false)
         .eq("type", "expense")
         .gte("date", last30DaysStart),
       supabase
         .from("recurring_transactions")
-        .select("amount, next_due_date")
+        .select("amount, amount_minor, currency_code, next_due_date")
         .eq("is_active", true)
         .gte("next_due_date", today)
         .lte("next_due_date", in14Days),
@@ -84,23 +88,28 @@ export async function getFinancialConfidence(
         .limit(2),
     ]);
 
-  const safeToSpend = (accountsResult.data ?? [])
-    .filter((a) => a.type === "depository" && a.subtype === "checking")
-    .reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
+  // Money aggregations run in exact integer minor units (sumRows), then convert
+  // to a dollar number once for the score math below — which is ratio-based and
+  // inherently floating point. The float drift the old per-row `sum + amount`
+  // reduces introduced is gone; each total is exact to the cent.
+  const safeToSpend = Number(
+    sumRows(accountsResult.data ?? [], "current_balance", "USD", {
+      filter: (a) => a.type === "depository" && a.subtype === "checking",
+    }).toDecimalString()
+  );
 
   const allExpenses = expenseResult.data ?? [];
-  const spendThisMonth = allExpenses
-    .filter((t) => t.date >= startOfThisMonth)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const spendLastMonth = allExpenses
-    .filter((t) => t.date < startOfThisMonth)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const spendThisMonth = Number(
+    sumRows(allExpenses, "amount", "USD", { filter: (t) => (t.date as string) >= startOfThisMonth }).toDecimalString()
+  );
+  const spendLastMonth = Number(
+    sumRows(allExpenses, "amount", "USD", { filter: (t) => (t.date as string) < startOfThisMonth }).toDecimalString()
+  );
 
-  const recentExpenses = recentExpenseResult.data ?? [];
-  const totalRecentSpend = recentExpenses.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const totalRecentSpend = Number(sumRows(recentExpenseResult.data ?? [], "amount", "USD").toDecimalString());
   const avgDailySpendLast30Days = totalRecentSpend / 30;
 
-  const billsDueNext14Days = (billsResult.data ?? []).reduce((sum, b) => sum + (b.amount ?? 0), 0);
+  const billsDueNext14Days = Number(sumRows(billsResult.data ?? [], "amount", "USD").toDecimalString());
 
   const score = computeScore({
     safeToSpend,
