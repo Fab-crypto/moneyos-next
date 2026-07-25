@@ -2,20 +2,31 @@ import { Money } from "./money";
 import { getCurrency, isSupportedCurrency } from "./currencies";
 
 /**
- * Dual-write flag for the money-representation migration.
+ * Whether money writes populate the integer minor-unit columns alongside the
+ * legacy numeric ones.
  *
- * OFF (default) reproduces the exact pre-migration behaviour — only the legacy
- * numeric columns are written — so every caller of the helpers below is safe to
- * deploy *before* the Phase 1 schema migration lands. After the migration is
- * applied and reconciled, set MONEY_DUAL_WRITE=true and writes begin populating
- * the new integer minor-unit columns alongside the legacy ones. Reads do not
- * change until the later cutover phase.
+ * Dual-write is the normal production behaviour during the money migration
+ * (Phases 3–4): it is **ON by default and needs no environment configuration**.
+ * The legacy and minor columns are always written together in a single row
+ * upsert, so the two representations can never diverge.
+ *
+ * EMERGENCY KILL-SWITCH: if a regression is discovered, set BOTH
+ * `MONEY_DUAL_WRITE=false` and `NEXT_PUBLIC_MONEY_DUAL_WRITE=false` (then
+ * redeploy) to fall back to writing only the legacy columns. Reads already
+ * tolerate a null minor column (see lib/money/read.ts), so disabling is safe.
+ *
+ * ⚠️ TEMPORARY — REMOVAL MILESTONE: dual-write is migration scaffolding, not a
+ * permanent feature. It MUST be deleted at **Phase 5 (Contract)**, when the
+ * legacy numeric columns are dropped and `*_minor` becomes the sole source of
+ * truth. At that point this function, the flag, and the legacy branch in
+ * `moneyField`/`currencyFields` all go away, and callers write minor units
+ * unconditionally. See supabase/README.md and the money-migration status note.
  */
 export function isMoneyDualWriteEnabled(): boolean {
-  // Checked on both server (MONEY_DUAL_WRITE) and client
-  // (NEXT_PUBLIC_MONEY_DUAL_WRITE), since money is written from both. Set both
-  // env vars together when enabling dual-write after the migration lands.
-  return process.env.MONEY_DUAL_WRITE === "true" || process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE === "true";
+  // On unless explicitly disabled. Checked on both server (MONEY_DUAL_WRITE)
+  // and client (NEXT_PUBLIC_MONEY_DUAL_WRITE, inlined at build time) because
+  // money is written from both; set both to "false" together to kill-switch.
+  return process.env.MONEY_DUAL_WRITE !== "false" && process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE !== "false";
 }
 
 /**
