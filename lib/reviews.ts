@@ -1,5 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { sumRows, moneyFromRow } from "@/lib/money/read";
+import { Money } from "@/lib/money/money";
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -97,7 +99,7 @@ export async function getOrCreateWeeklyReview(
   const [txResult, snapshotsResult, goalsResult] = await Promise.all([
     supabase
       .from("transactions")
-      .select("amount, category, merchant_name, name, date, type")
+      .select("amount, amount_minor, currency_code, category, merchant_name, name, date, type")
       .eq("user_id", userId)
       .eq("is_removed", false)
       .gte("date", priorStart)
@@ -118,20 +120,25 @@ export async function getOrCreateWeeklyReview(
 
   if (thisWeekExpenses.length === 0 && thisWeekIncome.length === 0) return null;
 
-  const spent = thisWeekExpenses.reduce((s, t) => s + Math.abs(t.amount), 0);
-  const earned = thisWeekIncome.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const spent = Number(sumRows(thisWeekExpenses, "amount", "USD").toDecimalString());
+  const earned = Number(sumRows(thisWeekIncome, "amount", "USD").toDecimalString());
   const moneySaved = earned - spent;
 
   const largest = thisWeekExpenses.length > 0 ? thisWeekExpenses.reduce((max, t) => (Math.abs(t.amount) > Math.abs(max.amount) ? t : max)) : null;
-  const largestExpense = largest ? { merchant: largest.merchant_name || largest.name, amount: Math.abs(largest.amount) } : null;
+  const largestExpense = largest
+    ? { merchant: largest.merchant_name || largest.name, amount: Number(moneyFromRow(largest, "amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0) }
+    : null;
 
-  const byCategory = new Map<string, number>();
+  const byCategory = new Map<string, Money>();
   for (const t of thisWeekExpenses) {
     const cat = (t.category ?? "other").toLowerCase();
-    byCategory.set(cat, (byCategory.get(cat) ?? 0) + Math.abs(t.amount));
+    const money = moneyFromRow(t, "amount", { fallbackCurrency: "USD" });
+    if (money) byCategory.set(cat, (byCategory.get(cat) ?? Money.zero("USD")).add(money));
   }
-  const topEntry = [...byCategory.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
-  const bestCategory = topEntry ? { name: topEntry[0].charAt(0).toUpperCase() + topEntry[0].slice(1), amount: topEntry[1] } : null;
+  const topEntry = [...byCategory.entries()].sort((a, b) => b[1].compare(a[1]))[0] ?? null;
+  const bestCategory = topEntry
+    ? { name: topEntry[0].charAt(0).toUpperCase() + topEntry[0].slice(1), amount: Number(topEntry[1].toDecimalString()) }
+    : null;
 
   const snapshots = snapshotsResult.data ?? [];
   const safeToSpendTrend = {
@@ -212,12 +219,12 @@ export async function getOrCreateMonthlyStory(
   const [txResult, profileResult, snapshotsResult, goalsResult] = await Promise.all([
     supabase
       .from("transactions")
-      .select("amount, category, merchant_name, name, date, type")
+      .select("amount, amount_minor, currency_code, category, merchant_name, name, date, type")
       .eq("user_id", userId)
       .eq("is_removed", false)
       .gte("date", start)
       .lte("date", end),
-    supabase.from("profiles").select("monthly_income").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("monthly_income, monthly_income_minor, currency_code").eq("id", userId).maybeSingle(),
     supabase
       .from("financial_confidence_snapshots")
       .select("snapshot_date, score")
@@ -232,28 +239,30 @@ export async function getOrCreateMonthlyStory(
 
   if (expenses.length === 0 && income.length === 0) return null;
 
-  const spent = expenses.reduce((s, t) => s + Math.abs(t.amount), 0);
-  const earned = income.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const spent = Number(sumRows(expenses, "amount", "USD").toDecimalString());
+  const earned = Number(sumRows(income, "amount", "USD").toDecimalString());
   const moneySaved = earned - spent;
 
   const hasRealBudget = profileResult.data?.monthly_income != null;
-  const budget = profileResult.data?.monthly_income ?? null;
+  const budget = profileResult.data ? moneyFromRow(profileResult.data, "monthly_income", { fallbackCurrency: "USD" }) : null;
+  const budgetAmount = budget ? Number(budget.toDecimalString()) : null;
 
-  const byCategory = new Map<string, number>();
+  const byCategory = new Map<string, Money>();
   for (const t of expenses) {
     const cat = (t.category ?? "other").toLowerCase();
-    byCategory.set(cat, (byCategory.get(cat) ?? 0) + Math.abs(t.amount));
+    const money = moneyFromRow(t, "amount", { fallbackCurrency: "USD" });
+    if (money) byCategory.set(cat, (byCategory.get(cat) ?? Money.zero("USD")).add(money));
   }
   const topCategories = [...byCategory.entries()]
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1].compare(a[1]))
     .slice(0, 3)
-    .map(([name, amount]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), amount }));
+    .map(([name, money]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), amount: Number(money.toDecimalString()) }));
 
   const biggestPurchase =
     expenses.length > 0
       ? (() => {
           const biggest = expenses.reduce((max, t) => (Math.abs(t.amount) > Math.abs(max.amount) ? t : max));
-          return { merchant: biggest.merchant_name || biggest.name, amount: Math.abs(biggest.amount), date: biggest.date };
+          return { merchant: biggest.merchant_name || biggest.name, amount: Number(moneyFromRow(biggest, "amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0), date: biggest.date };
         })()
       : null;
 
@@ -289,7 +298,7 @@ export async function getOrCreateMonthlyStory(
     spent,
     moneySaved,
     hasRealBudget,
-    budget,
+    budget: budgetAmount,
     topCategories,
     biggestPurchase,
     confidenceScore,

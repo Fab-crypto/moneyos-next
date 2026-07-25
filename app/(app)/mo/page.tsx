@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { daysAgo } from "@/lib/date";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
+import { sumRows } from "@/lib/money/read";
 import { MOClient } from "./MOClient";
 
 export default async function MoPage() {
@@ -16,10 +17,13 @@ export default async function MoPage() {
 
   const [subResult, checkingResult, txResult, billsResult, confidence] = await Promise.all([
     supabase.from("subscriptions").select("status").eq("user_id", user.id).maybeSingle(),
-    supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
+    supabase
+      .from("accounts")
+      .select("current_balance, current_balance_minor, currency_code, type, subtype")
+      .eq("is_active", true),
     supabase
       .from("transactions")
-      .select("amount, category, date")
+      .select("amount, amount_minor, currency_code, category, date")
       .eq("is_removed", false)
       .eq("type", "expense")
       .gte("date", daysAgo(13)),
@@ -34,24 +38,30 @@ export default async function MoPage() {
 
   const isSubscribed = subResult.data?.status === "active" || subResult.data?.status === "trialing";
 
-  const safeToSpendToday = (checkingResult.data ?? [])
-    .filter((a) => a.type === "depository" && a.subtype === "checking")
-    .reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
+  const safeToSpendToday = Number(
+    sumRows(checkingResult.data ?? [], "current_balance", "USD", {
+      filter: (a) => a.type === "depository" && a.subtype === "checking",
+    }).toDecimalString()
+  );
 
   const allTx = txResult.data ?? [];
   const today = daysAgo(0);
-  const todaySpend = allTx.filter((t) => t.date === today).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const todaySpend = Number(
+    sumRows(allTx, "amount", "USD", { filter: (t) => t.date === today }).toDecimalString()
+  );
 
   const isFood = (cat: string | null) => {
     const c = (cat ?? "").toLowerCase();
     return c === "food" || c === "groceries" || c.includes("food");
   };
-  const thisWeekFood = allTx
-    .filter((t) => t.date >= daysAgo(6) && isFood(t.category))
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const lastWeekFood = allTx
-    .filter((t) => t.date >= daysAgo(13) && t.date < daysAgo(6) && isFood(t.category))
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const thisWeekFood = Number(
+    sumRows(allTx, "amount", "USD", { filter: (t) => (t.date as string) >= daysAgo(6) && isFood(t.category as string | null) }).toDecimalString()
+  );
+  const lastWeekFood = Number(
+    sumRows(allTx, "amount", "USD", {
+      filter: (t) => (t.date as string) >= daysAgo(13) && (t.date as string) < daysAgo(6) && isFood(t.category as string | null),
+    }).toDecimalString()
+  );
 
   const upcomingBills = (billsResult.data ?? []).map((b) => ({
     name: b.name,
