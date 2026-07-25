@@ -15,6 +15,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { formatMoney } from "@/lib/formatters";
 import { supabase } from "@/lib/supabase";
+import { moneyField, currencyFields } from "@/lib/money/persistence";
 import type { GoalPace } from "./page";
 
 interface Goal {
@@ -275,8 +276,9 @@ function GoalForm({ goal, onClose }: { goal: Goal | null; onClose: () => void })
 
     const payload = {
       name: name.trim(),
-      target_amount: parsedTarget,
-      current_amount: parsedCurrent,
+      ...moneyField("target_amount", parsedTarget, "USD"),
+      ...moneyField("current_amount", parsedCurrent, "USD"),
+      ...currencyFields("USD"),
       due_date: dueDate || null,
       is_primary: isPrimary,
     };

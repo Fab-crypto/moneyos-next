@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { daysAgo } from "@/lib/date";
 import { getFinancialConfidence, getSafeToSpendHistory } from "@/lib/financial-confidence";
+import { sumRows, moneyFromRow } from "@/lib/money/read";
+import { Money } from "@/lib/money/money";
 import { AnalyticsClient } from "./AnalyticsClient";
 
 export default async function AnalyticsPage() {
@@ -22,7 +24,7 @@ export default async function AnalyticsPage() {
     supabase.from("profiles").select("monthly_income").eq("id", user.id).maybeSingle(),
     supabase
       .from("transactions")
-      .select("amount, category, merchant_name, name, date")
+      .select("amount, amount_minor, currency_code, category, merchant_name, name, date")
       .eq("is_removed", false)
       .eq("type", "expense")
       .gte("date", startOfLastMonth)
@@ -41,22 +43,29 @@ export default async function AnalyticsPage() {
   const thisMonthTx = allTx.filter((t) => t.date >= startOfThisMonth);
   const lastMonthTx = allTx.filter((t) => t.date < startOfThisMonth);
 
-  const spendThisMonth = thisMonthTx.reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const spendLastMonth = lastMonthTx.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  // All money aggregations sum in exact integer minor units, converted to a
+  // dollar number once for the client.
+  const spendThisMonth = Number(sumRows(thisMonthTx, "amount", "USD").toDecimalString());
+  const spendLastMonth = Number(sumRows(lastMonthTx, "amount", "USD").toDecimalString());
 
-  const byCategory = new Map<string, number>();
+  const byCategory = new Map<string, Money>();
   for (const t of thisMonthTx) {
-    const cat = (t.category ?? "other").toLowerCase();
-    byCategory.set(cat, (byCategory.get(cat) ?? 0) + Math.abs(t.amount));
+    const cat = ((t.category as string) ?? "other").toLowerCase();
+    const money = moneyFromRow(t, "amount", { fallbackCurrency: "USD" });
+    if (!money) continue;
+    byCategory.set(cat, (byCategory.get(cat) ?? Money.zero("USD")).add(money));
   }
   const topCategories = [...byCategory.entries()]
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1].compare(a[1]))
     .slice(0, 5)
-    .map(([name, amount]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), amount }));
+    .map(([name, money]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      amount: Number(money.toDecimalString()),
+    }));
 
   const weeklyTrend = Array.from({ length: 7 }, (_, i) => {
     const day = daysAgo(6 - i);
-    return allTx.filter((t) => t.date === day).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    return Number(sumRows(allTx, "amount", "USD", { filter: (t) => t.date === day }).toDecimalString());
   });
 
   const sourceForBiggest = thisMonthTx.length > 0 ? thisMonthTx : allTx;
@@ -67,7 +76,7 @@ export default async function AnalyticsPage() {
           return {
             merchant: biggest.merchant_name || biggest.name,
             category: (biggest.category ?? "other").toLowerCase(),
-            amount: Math.abs(biggest.amount),
+            amount: Number(moneyFromRow(biggest, "amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0),
             date: biggest.date,
           };
         })()
@@ -77,10 +86,14 @@ export default async function AnalyticsPage() {
     const c = (cat ?? "").toLowerCase();
     return c === "food" || c === "groceries";
   };
-  const thisWeekFood = allTx.filter((t) => t.date >= daysAgo(6) && isFood(t.category)).reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const lastWeekFood = allTx
-    .filter((t) => t.date >= daysAgo(13) && t.date < daysAgo(6) && isFood(t.category))
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const thisWeekFood = Number(
+    sumRows(allTx, "amount", "USD", { filter: (t) => (t.date as string) >= daysAgo(6) && isFood(t.category as string | null) }).toDecimalString()
+  );
+  const lastWeekFood = Number(
+    sumRows(allTx, "amount", "USD", {
+      filter: (t) => (t.date as string) >= daysAgo(13) && (t.date as string) < daysAgo(6) && isFood(t.category as string | null),
+    }).toDecimalString()
+  );
 
   let smartInsight: string;
   if (lastWeekFood > 0) {

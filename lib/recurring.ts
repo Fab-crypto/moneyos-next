@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { moneyField, currencyFields } from "@/lib/money/persistence";
 
 export const RECURRING_WINDOW_DAYS = 90;
 
@@ -157,7 +158,11 @@ export async function refreshRecurringBills(
         user_id: userId,
         account_id: bill.accountId,
         name: bill.name,
-        amount: bill.amount,
+        // bill.amount is an average of matched transactions (fractional); the
+        // boundary conversion rounds it to exact cents, removing the float
+        // artifacts this path used to persist into subscription_price_history.
+        ...moneyField("amount", bill.amount, "USD"),
+        ...currencyFields("USD"),
         frequency: bill.frequency,
         next_due_date: bill.nextDueDate,
         category: bill.category,
@@ -202,7 +207,12 @@ export async function refreshRecurringBills(
         .map((r) => {
           const id = idByKey.get(`${r.name}|${r.accountId}`);
           if (!id) return null;
-          return { recurring_transaction_id: id, user_id: userId, amount: r.amount };
+          return {
+            recurring_transaction_id: id,
+            user_id: userId,
+            ...moneyField("amount", r.amount, "USD"),
+            ...currencyFields("USD"),
+          };
         })
         .filter((r): r is NonNullable<typeof r> => r !== null);
 

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
+import { sumRows, moneyFromRow } from "@/lib/money/read";
 import { TransactionsClient } from "./TransactionsClient";
 import type { Transaction } from "@/types/transaction";
 
@@ -20,13 +21,16 @@ export default async function TransactionsPage() {
     await Promise.all([
       supabase
         .from("transactions")
-        .select("id, name, merchant_name, amount, type, category, date, account_id")
+        .select("id, name, merchant_name, amount, amount_minor, currency_code, type, category, date, account_id")
         .eq("is_removed", false)
         .order("date", { ascending: false })
         .limit(100),
       supabase.from("accounts").select("id, name, institution_id"),
       supabase.from("institutions").select("id, name"),
-      supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
+      supabase
+        .from("accounts")
+        .select("current_balance, current_balance_minor, currency_code, type, subtype")
+        .eq("is_active", true),
       supabase.from("recurring_transactions").select("name, account_id").eq("user_id", user.id).eq("is_active", true),
       getFinancialConfidence(supabase, user.id),
     ]);
@@ -59,15 +63,17 @@ export default async function TransactionsPage() {
       accountId: t.account_id,
       type,
       date: t.date,
-      amount: Math.abs(t.amount),
+      amount: Number(moneyFromRow(t, "amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0),
       notes: undefined,
       recurring: activeRecurringKeys.has(`${merchant}|${t.account_id}`),
     };
   });
 
-  const safeToSpendToday = (checkingResult.data ?? [])
-    .filter((a) => a.type === "depository" && a.subtype === "checking")
-    .reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
+  const safeToSpendToday = Number(
+    sumRows(checkingResult.data ?? [], "current_balance", "USD", {
+      filter: (a) => a.type === "depository" && a.subtype === "checking",
+    }).toDecimalString()
+  );
 
   return <TransactionsClient transactions={transactions} safeToSpendToday={safeToSpendToday} confidence={confidence} />;
 }

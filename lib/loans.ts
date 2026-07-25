@@ -1,6 +1,31 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { plaidClient } from "@/lib/plaid";
+import { moneyField, currencyFields } from "@/lib/money/persistence";
+
+// Plaid liabilities don't reliably carry a per-liability currency; the owning
+// account's currency applies. MoneyOS is single-currency (USD) for v1, so we
+// convert at USD here. When multi-currency lands, thread the account currency
+// (from accountIdByPlaidId's account) through instead of this constant.
+function loanMoneyColumns(
+  currency: string,
+  vals: {
+    last_payment_amount?: number | null;
+    minimum_payment_amount?: number | null;
+    origination_principal_amount?: number | null;
+    ytd_interest_paid?: number | null;
+    ytd_principal_paid?: number | null;
+  }
+): Record<string, string | number | null> {
+  return {
+    ...moneyField("last_payment_amount", vals.last_payment_amount ?? null, currency),
+    ...moneyField("minimum_payment_amount", vals.minimum_payment_amount ?? null, currency),
+    ...moneyField("origination_principal_amount", vals.origination_principal_amount ?? null, currency),
+    ...moneyField("ytd_interest_paid", vals.ytd_interest_paid ?? null, currency),
+    ...moneyField("ytd_principal_paid", vals.ytd_principal_paid ?? null, currency),
+    ...currencyFields(currency),
+  };
+}
 
 export async function syncLoanDetails(
   admin: SupabaseClient,
@@ -29,15 +54,14 @@ export async function syncLoanDetails(
       account_id: accountId,
       loan_type: "credit",
       interest_rate_percentage: purchaseApr?.apr_percentage ?? null,
-      last_payment_amount: credit.last_payment_amount,
       last_payment_date: credit.last_payment_date,
       next_payment_due_date: credit.next_payment_due_date,
-      minimum_payment_amount: credit.minimum_payment_amount,
       is_overdue: credit.is_overdue,
       origination_date: null,
-      origination_principal_amount: null,
-      ytd_interest_paid: null,
-      ytd_principal_paid: null,
+      ...loanMoneyColumns("USD", {
+        last_payment_amount: credit.last_payment_amount,
+        minimum_payment_amount: credit.minimum_payment_amount,
+      }),
       details: {
         aprs: credit.aprs,
         last_statement_balance: credit.last_statement_balance,
@@ -56,15 +80,17 @@ export async function syncLoanDetails(
       account_id: accountId,
       loan_type: "mortgage",
       interest_rate_percentage: mortgage.interest_rate?.percentage ?? null,
-      last_payment_amount: mortgage.last_payment_amount,
       last_payment_date: mortgage.last_payment_date,
       next_payment_due_date: mortgage.next_payment_due_date,
-      minimum_payment_amount: mortgage.next_monthly_payment ?? null,
       is_overdue: (mortgage.past_due_amount ?? 0) > 0,
       origination_date: mortgage.origination_date,
-      origination_principal_amount: mortgage.origination_principal_amount,
-      ytd_interest_paid: mortgage.ytd_interest_paid,
-      ytd_principal_paid: mortgage.ytd_principal_paid,
+      ...loanMoneyColumns("USD", {
+        last_payment_amount: mortgage.last_payment_amount,
+        minimum_payment_amount: mortgage.next_monthly_payment ?? null,
+        origination_principal_amount: mortgage.origination_principal_amount,
+        ytd_interest_paid: mortgage.ytd_interest_paid,
+        ytd_principal_paid: mortgage.ytd_principal_paid,
+      }),
       details: {
         property_address: mortgage.property_address,
         has_pmi: mortgage.has_pmi,
@@ -89,15 +115,17 @@ export async function syncLoanDetails(
       account_id: accountId,
       loan_type: "student",
       interest_rate_percentage: student.interest_rate_percentage,
-      last_payment_amount: student.last_payment_amount,
       last_payment_date: student.last_payment_date,
       next_payment_due_date: student.next_payment_due_date,
-      minimum_payment_amount: student.minimum_payment_amount,
       is_overdue: student.is_overdue,
       origination_date: student.origination_date,
-      origination_principal_amount: student.origination_principal_amount,
-      ytd_interest_paid: student.ytd_interest_paid,
-      ytd_principal_paid: student.ytd_principal_paid,
+      ...loanMoneyColumns("USD", {
+        last_payment_amount: student.last_payment_amount,
+        minimum_payment_amount: student.minimum_payment_amount,
+        origination_principal_amount: student.origination_principal_amount,
+        ytd_interest_paid: student.ytd_interest_paid,
+        ytd_principal_paid: student.ytd_principal_paid,
+      }),
       details: {
         loan_name: student.loan_name,
         guarantor: student.guarantor,
@@ -143,7 +171,8 @@ export async function recordLoanBalanceSnapshots(
   const rows = accounts.map((a) => ({
     user_id: userId,
     account_id: a.id,
-    balance: a.current_balance ?? 0,
+    ...moneyField("balance", a.current_balance ?? 0, "USD"),
+    ...currencyFields("USD"),
     snapshot_date: today,
   }));
 

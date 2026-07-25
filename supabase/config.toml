@@ -1,0 +1,10 @@
+# Supabase CLI configuration for MoneyOS.
+# project_id is a local label; link to the remote project before pushing:
+#   supabase link --project-ref abkccdbbdfjrfskrssil
+#   supabase db push        # applies pending migrations in supabase/migrations
+project_id = "moneyos"
+
+[db]
+# Must match the remote Postgres major version. Confirm in the Supabase
+# dashboard (Settings -> Infrastructure) before running `supabase db push`.
+major_version = 15

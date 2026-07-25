@@ -5,6 +5,7 @@ import { refreshRecurringBills } from "@/lib/recurring";
 import { syncLoanDetails, recordLoanBalanceSnapshots } from "@/lib/loans";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transaction as PlaidTransaction } from "plaid";
+import { moneyField, currencyFields } from "@/lib/money/persistence";
 
 interface PlaidItemRow {
   id: string;
@@ -70,6 +71,7 @@ export async function syncPlaidItemTransactions(
 
         const pfcPrimary = t.personal_finance_category?.primary ?? null;
         const pfcDetailed = t.personal_finance_category?.detailed ?? null;
+        const currency = t.iso_currency_code ?? "USD";
 
         return {
           user_id: userId,
@@ -77,8 +79,11 @@ export async function syncPlaidItemTransactions(
           plaid_transaction_id: t.transaction_id,
           name: t.name,
           merchant_name: t.merchant_name,
-          amount: Math.abs(t.amount),
-          currency: t.iso_currency_code ?? "USD",
+          // Plaid amounts are decimals — converted to exact minor units at the
+          // boundary via moneyField; no float propagates past this point.
+          ...moneyField("amount", Math.abs(t.amount), currency),
+          ...currencyFields(currency),
+          currency,
           type: resolveType(t.amount, pfcPrimary),
           plaid_category_primary: pfcPrimary,
           plaid_category_detailed: pfcDetailed,
@@ -115,24 +120,21 @@ export async function syncPlaidItemTransactions(
           const accountId = accountIdByPlaidId.get(a.account_id);
           if (!accountId) return null;
 
+          const currency = a.balances.iso_currency_code ?? "USD";
           return {
             id: accountId,
-            current_balance: a.balances.current ?? 0,
-            available_balance: a.balances.available,
+            ...moneyField("current_balance", a.balances.current ?? 0, currency),
+            ...moneyField("available_balance", a.balances.available, currency),
+            ...currencyFields(currency),
           };
         })
         .filter((row): row is NonNullable<typeof row> => row !== null);
 
       for (const update of balanceUpdates) {
-        const { error: balanceError } = await admin
-          .from("accounts")
-          .update({
-            current_balance: update.current_balance,
-            available_balance: update.available_balance,
-          })
-          .eq("id", update.id);
+        const { id, ...balanceColumns } = update;
+        const { error: balanceError } = await admin.from("accounts").update(balanceColumns).eq("id", id);
         if (balanceError) {
-          console.error(`[plaid-sync] balance update failed for account=${update.id}:`, balanceError);
+          console.error(`[plaid-sync] balance update failed for account=${id}:`, balanceError);
         }
       }
 
