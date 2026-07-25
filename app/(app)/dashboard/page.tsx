@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatWeekdayDate, getDaysUntilDue, formatDueLabel, daysAgo } from "@/lib/date";
 import { formatMoney } from "@/lib/formatters";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
+import { sumRows } from "@/lib/money/read";
 import { getOrCreateWeeklyReview, getOrCreateMonthlyStory } from "@/lib/reviews";
 import { DashboardClient } from "./DashboardClient";
 
@@ -83,7 +84,10 @@ export default async function DashboardPage() {
       .select("full_name, last_greeting_shown_date, monthly_income, onboarding_completed_at")
       .eq("id", user.id)
       .single(),
-    supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
+    supabase
+      .from("accounts")
+      .select("current_balance, current_balance_minor, currency_code, type, subtype")
+      .eq("is_active", true),
     supabase
       .from("recurring_transactions")
       .select("id, name, amount, next_due_date")
@@ -99,13 +103,13 @@ export default async function DashboardPage() {
       .maybeSingle(),
     supabase
       .from("transactions")
-      .select("amount, type")
+      .select("amount, amount_minor, currency_code, type")
       .eq("user_id", user.id)
       .eq("is_removed", false)
       .gte("date", firstOfMonthIso),
     supabase
       .from("transactions")
-      .select("amount")
+      .select("amount, amount_minor, currency_code")
       .eq("user_id", user.id)
       .eq("is_removed", false)
       .eq("type", "expense")
@@ -113,7 +117,7 @@ export default async function DashboardPage() {
       .lt("date", firstOfMonthIso),
     supabase
       .from("transactions")
-      .select("amount, date")
+      .select("amount, amount_minor, currency_code, date")
       .eq("user_id", user.id)
       .eq("is_removed", false)
       .eq("type", "expense")
@@ -133,9 +137,13 @@ export default async function DashboardPage() {
   const accounts = accountsResult.data ?? [];
   const hasAccounts = accounts.length > 0;
 
-  const safeToSpend = accounts
-    .filter((a) => a.type === "depository" && a.subtype === "checking")
-    .reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
+  // Money totals sum in exact integer minor units (sumRows), converted to a
+  // dollar number once for the client. No float accumulation drift.
+  const safeToSpend = Number(
+    sumRows(accounts, "current_balance", "USD", {
+      filter: (a) => a.type === "depository" && a.subtype === "checking",
+    }).toDecimalString()
+  );
 
   const upcomingBills = (billsResult.data ?? []).map((b) => ({
     id: b.id,
@@ -182,20 +190,24 @@ export default async function DashboardPage() {
     : null;
 
   const monthTx = monthTxResult.data ?? [];
-  const monthEarned = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + Math.abs(t.amount), 0);
-  const monthSpent = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + Math.abs(t.amount), 0);
+  const monthEarned = Number(
+    sumRows(monthTx, "amount", "USD", { filter: (t) => t.type === "income" }).toDecimalString()
+  );
+  const monthSpent = Number(
+    sumRows(monthTx, "amount", "USD", { filter: (t) => t.type === "expense" }).toDecimalString()
+  );
   const monthlySavings = monthEarned - monthSpent;
 
-  const lastMonthSpent = (lastMonthTxResult.data ?? []).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const lastMonthSpent = Number(sumRows(lastMonthTxResult.data ?? [], "amount", "USD").toDecimalString());
 
   const weekTx = weekTxResult.data ?? [];
   const oneWeekAgo = daysAgo(6);
-  const thisWeekSpend = weekTx
-    .filter((t) => t.date >= oneWeekAgo)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const lastWeekSpend = weekTx
-    .filter((t) => t.date < oneWeekAgo)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const thisWeekSpend = Number(
+    sumRows(weekTx, "amount", "USD", { filter: (t) => (t.date as string) >= oneWeekAgo }).toDecimalString()
+  );
+  const lastWeekSpend = Number(
+    sumRows(weekTx, "amount", "USD", { filter: (t) => (t.date as string) < oneWeekAgo }).toDecimalString()
+  );
 
   const weeklyHeadline = buildWeeklyHeadline(hasAccounts, thisWeekSpend, lastWeekSpend);
   const monthSoFarInsight = buildMonthSoFarInsight(

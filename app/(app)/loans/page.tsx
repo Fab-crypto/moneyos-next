@@ -1,7 +1,16 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { computeCreditPayoffProjection } from "@/lib/loans";
+import { moneyFromRow } from "@/lib/money/read";
 import { LoansClient } from "./LoansClient";
+
+// Read a money field to an exact dollar number, preserving null (a genuinely
+// absent value) so downstream "not set" states are unchanged.
+function moneyNum(row: Record<string, unknown> | null, base: string): number | null {
+  if (!row) return null;
+  const money = moneyFromRow(row, base, { fallbackCurrency: "USD" });
+  return money ? Number(money.toDecimalString()) : null;
+}
 
 function yearsFromNow(dateStr: string | null): number | null {
   if (!dateStr) return null;
@@ -24,7 +33,9 @@ export default async function LoansPage() {
   const [accountsResult, institutionsResult] = await Promise.all([
     supabase
       .from("accounts")
-      .select("id, name, official_name, mask, type, subtype, current_balance, institution_id")
+      .select(
+        "id, name, official_name, mask, type, subtype, current_balance, current_balance_minor, currency_code, institution_id"
+      )
       .eq("is_active", true)
       .in("type", ["loan", "credit"]),
     supabase.from("institutions").select("id, name"),
@@ -39,7 +50,7 @@ export default async function LoansPage() {
           supabase.from("loan_details").select("*").in("account_id", accountIds),
           supabase
             .from("loan_balance_snapshots")
-            .select("account_id, balance, snapshot_date")
+            .select("account_id, balance, balance_minor, currency_code, snapshot_date")
             .in("account_id", accountIds)
             .order("snapshot_date", { ascending: true }),
         ])
@@ -51,7 +62,7 @@ export default async function LoansPage() {
   const snapshotsByAccountId = new Map<string, { date: string; balance: number }[]>();
   for (const s of snapshotsResult.data ?? []) {
     const list = snapshotsByAccountId.get(s.account_id) ?? [];
-    list.push({ date: s.snapshot_date, balance: s.balance });
+    list.push({ date: s.snapshot_date, balance: moneyNum(s, "balance") ?? 0 });
     snapshotsByAccountId.set(s.account_id, list);
   }
 
@@ -60,9 +71,9 @@ export default async function LoansPage() {
     const loanType =
       (details?.loan_type as "credit" | "mortgage" | "student" | undefined) ??
       (account.subtype === "credit card" ? "credit" : null);
-    const balance = account.current_balance ?? 0;
+    const balance = moneyNum(account, "current_balance") ?? 0;
     const interestRate = details?.interest_rate_percentage ?? null;
-    const minimumPaymentAmount = details?.minimum_payment_amount ?? null;
+    const minimumPaymentAmount = moneyNum(details, "minimum_payment_amount");
     const detailsJson = (details?.details as Record<string, unknown>) ?? null;
 
     let payoffDate: string | null = null;
@@ -93,7 +104,7 @@ export default async function LoansPage() {
       nextPaymentDueDate: details?.next_payment_due_date ?? null,
       minimumPaymentAmount,
       isOverdue: details?.is_overdue ?? false,
-      lastPaymentAmount: details?.last_payment_amount ?? null,
+      lastPaymentAmount: moneyNum(details, "last_payment_amount"),
       lastPaymentDate: details?.last_payment_date ?? null,
       details: detailsJson,
       payoffDate,

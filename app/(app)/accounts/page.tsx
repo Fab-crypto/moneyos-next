@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getInstitutionInfo } from "@/lib/plaid";
+import { moneyFromRow } from "@/lib/money/read";
+import { Money } from "@/lib/money/money";
 import { AccountsClient } from "./AccountsClient";
 
 function formatDueLabel(nextDueDate: string | null): string {
@@ -30,7 +32,7 @@ export default async function AccountsPage() {
     supabase.from("institutions").select("id, name, status, last_synced_at, logo_url, plaid_institution_id"),
     supabase
       .from("accounts")
-      .select("id, name, current_balance, type, subtype,institution_id")
+      .select("id, name, current_balance, current_balance_minor, currency_code, type, subtype,institution_id")
       .eq("is_active", true),
     supabase
       .from("recurring_transactions")
@@ -70,25 +72,34 @@ export default async function AccountsPage() {
   }
 
   const DEBT_TYPES = new Set(["credit", "loan"]);
-  const signedBalance = (type: string, balance: number) => (DEBT_TYPES.has(type) ? -balance : balance);
+  // Net-worth buckets accumulate in exact integer minor units. Debt-type
+  // balances are signed negative. Each bucket and per-account balance is
+  // converted to a dollar number once, at the client boundary.
+  const balanceMoney = (a: Record<string, unknown>): Money =>
+    moneyFromRow(a, "current_balance", { fallbackCurrency: "USD" }) ?? Money.zero("USD");
+  const signedMoney = (type: string, money: Money): Money => (DEBT_TYPES.has(type) ? money.negate() : money);
 
-  let cash = 0;
-  let savings = 0;
-  let investments = 0;
-  let debt = 0;
+  let cashM = Money.zero("USD");
+  let savingsM = Money.zero("USD");
+  let investmentsM = Money.zero("USD");
+  let debtM = Money.zero("USD");
 
   for (const a of rawAccounts) {
-    const balance = a.current_balance ?? 0;
-    if (a.type === "depository" && a.subtype === "checking") {
-      cash += balance;
-    } else if (a.type === "depository") {
-      savings += balance;
-    } else if (a.type === "investment") {
-      investments += balance;
-    } else if (DEBT_TYPES.has(a.type)) {
-      debt += balance;
-    }
+    const money = balanceMoney(a);
+    if (a.type === "depository" && a.subtype === "checking") cashM = cashM.add(money);
+    else if (a.type === "depository") savingsM = savingsM.add(money);
+    else if (a.type === "investment") investmentsM = investmentsM.add(money);
+    else if (DEBT_TYPES.has(a.type)) debtM = debtM.add(money);
   }
+
+  const cash = Number(cashM.toDecimalString());
+  const savings = Number(savingsM.toDecimalString());
+  const investments = Number(investmentsM.toDecimalString());
+  const debt = Number(debtM.toDecimalString());
+
+  let totalBalanceM = Money.zero("USD");
+  for (const a of rawAccounts) totalBalanceM = totalBalanceM.add(signedMoney(a.type, balanceMoney(a)));
+  const totalBalance = Number(totalBalanceM.toDecimalString());
 
   const institutions = rawInstitutions
     .map((inst) => {
@@ -97,7 +108,7 @@ export default async function AccountsPage() {
         .map((a) => ({
           id: a.id,
           name: a.name,
-          balance: signedBalance(a.type, a.current_balance ?? 0),
+          balance: Number(signedMoney(a.type, balanceMoney(a)).toDecimalString()),
         }));
       return {
         id: inst.id,
@@ -109,11 +120,6 @@ export default async function AccountsPage() {
       };
     })
     .filter((inst) => inst.accounts.length > 0);
-
-  const totalBalance = institutions.reduce(
-    (sum, inst) => sum + inst.accounts.reduce((s, a) => s + a.balance, 0),
-    0
-  );
 
   const mostRecentSync =
     rawInstitutions

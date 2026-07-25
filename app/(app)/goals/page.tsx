@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { sumRows, moneyFromRow } from "@/lib/money/read";
 import { GoalsClient } from "./GoalsClient";
 
 export interface GoalPace {
@@ -54,22 +55,28 @@ export default async function GoalsPage() {
 
   const { data: goalsData } = await supabase
     .from("goals")
-    .select("id, name, current_amount, target_amount, due_date, is_primary, created_at")
+    .select(
+      "id, name, current_amount, current_amount_minor, target_amount, target_amount_minor, currency_code, due_date, is_primary, created_at"
+    )
     .eq("user_id", user.id)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: true });
 
-  const goals = (goalsData ?? []).map((g) => ({
-    id: g.id,
-    name: g.name,
-    currentAmount: g.current_amount,
-    targetAmount: g.target_amount,
-    dueDate: g.due_date,
-    isPrimary: g.is_primary,
-    pace: computePace(g.current_amount, g.target_amount, g.due_date, g.created_at),
-  }));
+  const goals = (goalsData ?? []).map((g) => {
+    const currentAmount = Number(moneyFromRow(g, "current_amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0);
+    const targetAmount = Number(moneyFromRow(g, "target_amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0);
+    return {
+      id: g.id,
+      name: g.name,
+      currentAmount,
+      targetAmount,
+      dueDate: g.due_date,
+      isPrimary: g.is_primary,
+      pace: computePace(currentAmount, targetAmount, g.due_date, g.created_at),
+    };
+  });
 
-  const totalSaved = goals.reduce((sum, g) => sum + g.currentAmount, 0);
+  const totalSaved = Number(sumRows(goalsData ?? [], "current_amount", "USD").toDecimalString());
 
   return <GoalsClient goals={goals} totalSaved={totalSaved} />;
 }

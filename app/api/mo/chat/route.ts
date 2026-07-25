@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { daysAgo } from "@/lib/date";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
+import { sumRows, moneyFromRow } from "@/lib/money/read";
+import { Money } from "@/lib/money/money";
 
 function buildSystemPrompt(context: string): string {
   return `You are MO, a calm, supportive money coach inside the MoneyOS app.
@@ -62,10 +64,13 @@ export async function POST(request: Request) {
   const trimmedMessages = messages.slice(-10);
 
   const [checkingResult, txResult, billsResult, confidence] = await Promise.all([
-    supabase.from("accounts").select("current_balance, type, subtype").eq("is_active", true),
+    supabase
+      .from("accounts")
+      .select("current_balance, current_balance_minor, currency_code, type, subtype")
+      .eq("is_active", true),
     supabase
       .from("transactions")
-      .select("amount, category, date")
+      .select("amount, amount_minor, currency_code, category, date")
       .eq("is_removed", false)
       .eq("type", "expense")
       .gte("date", daysAgo(13)),
@@ -78,23 +83,30 @@ export async function POST(request: Request) {
     getFinancialConfidence(supabase, user.id),
   ]);
 
-  const safeToSpendToday = (checkingResult.data ?? [])
-    .filter((a) => a.type === "depository" && a.subtype === "checking")
-    .reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
+  // Exact integer-minor aggregation for the figures fed to the AI context.
+  const safeToSpendToday = Number(
+    sumRows(checkingResult.data ?? [], "current_balance", "USD", {
+      filter: (a) => a.type === "depository" && a.subtype === "checking",
+    }).toDecimalString()
+  );
 
   const allTx = txResult.data ?? [];
   const today = daysAgo(0);
-  const todaySpend = allTx.filter((t) => t.date === today).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const todaySpend = Number(
+    sumRows(allTx, "amount", "USD", { filter: (t) => t.date === today }).toDecimalString()
+  );
 
-  const byCategoryThisWeek = new Map<string, number>();
-  for (const t of allTx.filter((t) => t.date >= daysAgo(6))) {
-    const cat = (t.category ?? "other").toLowerCase();
-    byCategoryThisWeek.set(cat, (byCategoryThisWeek.get(cat) ?? 0) + Math.abs(t.amount));
+  const byCategoryThisWeek = new Map<string, Money>();
+  for (const t of allTx.filter((t) => (t.date as string) >= daysAgo(6))) {
+    const cat = ((t.category as string) ?? "other").toLowerCase();
+    const money = moneyFromRow(t, "amount", { fallbackCurrency: "USD" });
+    if (!money) continue;
+    byCategoryThisWeek.set(cat, (byCategoryThisWeek.get(cat) ?? Money.zero("USD")).add(money));
   }
   const categoryBreakdown =
     [...byCategoryThisWeek.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([cat, amt]) => `${cat}: $${amt.toFixed(2)}`)
+      .sort((a, b) => b[1].compare(a[1]))
+      .map(([cat, amt]) => `${cat}: $${amt.toDecimalString()}`)
       .join(", ") || "no spending recorded this week";
 
   const upcomingBillsList =
