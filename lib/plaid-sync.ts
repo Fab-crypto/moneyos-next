@@ -6,6 +6,7 @@ import { syncLoanDetails, recordLoanBalanceSnapshots } from "@/lib/loans";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transaction as PlaidTransaction } from "plaid";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { logMoneyWriteError } from "@/lib/money/log";
 
 interface PlaidItemRow {
   id: string;
@@ -100,7 +101,10 @@ export async function syncPlaidItemTransactions(
       const { error: upsertError } = await admin
         .from("transactions")
         .upsert(upsertRows, { onConflict: "plaid_transaction_id" });
-      if (upsertError) throw upsertError;
+      if (upsertError) {
+        logMoneyWriteError({ op: "transactions.upsert", table: "transactions", userId, error: upsertError });
+        throw upsertError;
+      }
     }
 
     if (removed.length > 0) {
@@ -134,7 +138,7 @@ export async function syncPlaidItemTransactions(
         const { id, ...balanceColumns } = update;
         const { error: balanceError } = await admin.from("accounts").update(balanceColumns).eq("id", id);
         if (balanceError) {
-          console.error(`[plaid-sync] balance update failed for account=${id}:`, balanceError);
+          logMoneyWriteError({ op: `accounts.update(balance) account=${id}`, table: "accounts", userId, error: balanceError });
         }
       }
 

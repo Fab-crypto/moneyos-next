@@ -10,21 +10,74 @@ afterEach(() => {
   else process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE = originalPublic;
 });
 
-describe("dual-write flag", () => {
-  it("is off unless explicitly enabled", () => {
+describe("dual-write flag (on by default, kill-switch to disable)", () => {
+  it("is ON when no env is configured — the normal production path", () => {
     delete process.env.MONEY_DUAL_WRITE;
     delete process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE;
-    expect(isMoneyDualWriteEnabled()).toBe(false);
-    process.env.MONEY_DUAL_WRITE = "false";
-    expect(isMoneyDualWriteEnabled()).toBe(false);
-    process.env.MONEY_DUAL_WRITE = "true";
     expect(isMoneyDualWriteEnabled()).toBe(true);
   });
 
-  it("is enabled by the client (NEXT_PUBLIC) flag too, for client-side writes", () => {
+  it("kill-switch: disabled when both flags are set to \"false\"", () => {
+    process.env.MONEY_DUAL_WRITE = "false";
+    process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE = "false";
+    expect(isMoneyDualWriteEnabled()).toBe(false);
+  });
+
+  it("fails safe: either flag set to \"false\" disables (never accidentally half-on)", () => {
+    delete process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE;
+    process.env.MONEY_DUAL_WRITE = "false";
+    expect(isMoneyDualWriteEnabled()).toBe(false);
     delete process.env.MONEY_DUAL_WRITE;
-    process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE = "true";
+    process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE = "false";
+    expect(isMoneyDualWriteEnabled()).toBe(false);
+  });
+
+  it("ignores non-\"false\" values — only the literal string disables", () => {
+    process.env.MONEY_DUAL_WRITE = "true";
+    delete process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE;
     expect(isMoneyDualWriteEnabled()).toBe(true);
+    process.env.MONEY_DUAL_WRITE = "0";
+    expect(isMoneyDualWriteEnabled()).toBe(true);
+  });
+});
+
+describe("default-path behaviour + idempotency + atomicity", () => {
+  it("success: with no env, moneyField writes BOTH legacy and minor", () => {
+    delete process.env.MONEY_DUAL_WRITE;
+    delete process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE;
+    expect(moneyField("amount", 12.34, "USD")).toEqual({ amount: "12.34", amount_minor: "1234" });
+    expect(currencyFields("USD")).toEqual({ currency_code: "USD", scale: 2 });
+  });
+
+  it("kill-switch: with both flags false, moneyField writes legacy only", () => {
+    process.env.MONEY_DUAL_WRITE = "false";
+    process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE = "false";
+    expect(moneyField("amount", 12.34, "USD")).toEqual({ amount: "12.34" });
+    expect(currencyFields("USD")).toEqual({});
+  });
+
+  it("idempotent: identical input yields identical column fragments (safe to retry)", () => {
+    delete process.env.MONEY_DUAL_WRITE;
+    delete process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE;
+    const a = moneyField("amount", 19.99, "USD");
+    const b = moneyField("amount", 19.99, "USD");
+    expect(a).toEqual(b);
+    expect(a).toEqual({ amount: "19.99", amount_minor: "1999" });
+  });
+
+  it("atomicity by construction: a minor column is NEVER emitted without its legacy column", () => {
+    // Both live in one object spread into a single row upsert, so a partial
+    // legacy-without-minor (or minor-without-legacy) row is impossible.
+    for (const env of [{}, { MONEY_DUAL_WRITE: "true" }, { MONEY_DUAL_WRITE: "false", NEXT_PUBLIC_MONEY_DUAL_WRITE: "false" }]) {
+      delete process.env.MONEY_DUAL_WRITE;
+      delete process.env.NEXT_PUBLIC_MONEY_DUAL_WRITE;
+      Object.assign(process.env, env);
+      const frag = moneyField("current_balance", 1000, "USD");
+      const hasMinor = "current_balance_minor" in frag;
+      const hasLegacy = "current_balance" in frag;
+      expect(hasLegacy).toBe(true); // legacy always written
+      if (hasMinor) expect(hasLegacy).toBe(true); // minor only ever alongside legacy
+    }
   });
 });
 

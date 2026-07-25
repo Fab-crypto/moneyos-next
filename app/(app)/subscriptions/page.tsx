@@ -5,6 +5,7 @@ import {
   findLongRunningSubscriptions,
   computeHealthScore,
 } from "@/lib/subscription-health";
+import { moneyFromRow } from "@/lib/money/read";
 import { SubscriptionsClient } from "./SubscriptionsClient";
 
 function monthlyEquivalent(amount: number, frequency: string): number {
@@ -26,7 +27,7 @@ export default async function SubscriptionsPage() {
   const { data: subsData } = await supabase
     .from("recurring_transactions")
     .select(
-      "id, name, amount, frequency, next_due_date, category, review_status, source, account_id, created_at, is_trial, trial_end_date"
+      "id, name, amount, amount_minor, currency_code, frequency, next_due_date, category, review_status, source, account_id, created_at, is_trial, trial_end_date"
     )
     .eq("user_id", user.id)
     .eq("is_active", true)
@@ -40,7 +41,7 @@ export default async function SubscriptionsPage() {
     subIds.length > 0
       ? await supabase
           .from("subscription_price_history")
-          .select("recurring_transaction_id, amount, effective_date")
+          .select("recurring_transaction_id, amount, amount_minor, currency_code, effective_date")
           .in("recurring_transaction_id", subIds)
           .order("effective_date", { ascending: true })
       : { data: [] };
@@ -48,14 +49,14 @@ export default async function SubscriptionsPage() {
   const historyBySubId = new Map<string, { amount: number; date: string }[]>();
   for (const h of historyData ?? []) {
     const list = historyBySubId.get(h.recurring_transaction_id) ?? [];
-    list.push({ amount: h.amount, date: h.effective_date });
+    list.push({ amount: Number(moneyFromRow(h, "amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0), date: h.effective_date });
     historyBySubId.set(h.recurring_transaction_id, list);
   }
 
   const subscriptions = subs.map((s) => ({
     id: s.id,
     name: s.name,
-    amount: s.amount,
+    amount: Number(moneyFromRow(s, "amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0),
     frequency: s.frequency as "weekly" | "biweekly" | "monthly",
     nextDueDate: s.next_due_date,
     category: s.category,

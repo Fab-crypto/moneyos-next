@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
 import { sumRows } from "@/lib/money/read";
+import { logMoneyWriteError } from "@/lib/money/log";
 
 export interface FinancialConfidenceResult {
   score: number;
@@ -122,7 +123,7 @@ export async function getFinancialConfidence(
   const snapshots = snapshotsResult.data ?? [];
   const priorSnapshot = snapshots.find((s) => s.snapshot_date !== today);
 
-  await supabase.from("financial_confidence_snapshots").upsert(
+  const { error: snapshotError } = await supabase.from("financial_confidence_snapshots").upsert(
     {
       user_id: userId,
       score,
@@ -132,6 +133,14 @@ export async function getFinancialConfidence(
     },
     { onConflict: "user_id,snapshot_date" }
   );
+  if (snapshotError) {
+    logMoneyWriteError({
+      op: "financial_confidence_snapshots.upsert",
+      table: "financial_confidence_snapshots",
+      userId,
+      error: snapshotError,
+    });
+  }
 
   const previousScore = priorSnapshot?.score ?? null;
 
