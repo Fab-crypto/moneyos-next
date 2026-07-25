@@ -57,6 +57,23 @@ Writes then populate only the legacy numeric columns. This is safe because reads
 
 **Before Phase 5 can run:** re-backfill any rows written while dual-write was off (minor NULL) so no value is lost when the legacy column is dropped. Query pattern: `... WHERE <legacy> IS NOT NULL AND <minor> IS NULL`.
 
+### Success criteria for removing dual-write (single source of truth)
+
+Do **not** drop the legacy write path (Phase 5) until **all** of the following hold. This checklist is authoritative — nothing else should gate the removal:
+
+- [ ] **100% of production data migrated & verified** — every money row has a non-null `*_minor`; zero gap rows across all tables.
+- [ ] **Reconciliation reports zero mismatches** — `minor == round(legacy × 10^scale)` for every row (`node` reconciliation job over all money columns).
+- [ ] **All reads use minor units exclusively** — no read path consumes a legacy numeric column. (Server read paths verified on the `feat/money-dual-write-default-on` branch: dashboard, analytics, mo page + chat, transactions, accounts, goals, loans, subscriptions, reviews, financial-confidence.)
+- [ ] **No legacy dependencies remain** — no code, export, report, or AI-context builder references the legacy `<amount>` / `<balance>` columns.
+- [ ] **Stable production behavior over the observation period** — 24–48h (or agreed window) with **zero `money_write_failed`** log events under normal traffic.
+- [ ] **Rollback no longer depends on the legacy representation** — the kill-switch and any rollback plan operate without needing the old columns.
+
+Only when every box is checked: run the Phase 5 migration (`NOT NULL` + drop legacy columns) **and** delete the dual-write code (flag, `isMoneyDualWriteEnabled`, legacy branches of `moneyField`/`currencyFields`, structured-log call sites that reference dual-write state) in the same change.
+
+### Post-Phase-5 audit (required)
+
+After Phase 5, run a comprehensive audit — **financial correctness, database consistency, performance, security, scalability, App Store production readiness** — then proceed with the remaining high-priority security findings in order: **F-2** (explicit `user_id` filters on every user-scoped query), **F-3** (Financial Confidence caching to end recompute-on-read), **F-7** (security headers: HSTS, CSP, `nosniff`, `X-Frame-Options: DENY`) before public launch.
+
 ### Phase 1 safety summary
 
 - **Additive only** — no existing column altered/dropped; the app keeps running unchanged after apply.
