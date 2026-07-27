@@ -28,7 +28,17 @@ export function moneyFromRow(
   if (minor !== null && minor !== undefined) {
     // Exact path. PostgREST returns bigint as a number (within 2^53) or a
     // string; Money.ofMinor accepts both and validates it's an integer.
-    return Money.ofMinor(minor as number | string, currency);
+    // Guarded so a single malformed row (non-integer minor, or a currency_code
+    // not in the registry) can never throw and white-screen a render — it
+    // degrades to the legacy column instead.
+    try {
+      return Money.ofMinor(minor as number | string, currency);
+    } catch (err) {
+      console.error(
+        `[money] read: unusable ${minorKey}=${String(minor)} for currency=${currency}; falling back to legacy column.`,
+        err
+      );
+    }
   }
 
   const legacy = row[base];
