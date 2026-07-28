@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptToken } from "@/lib/crypto";
 import { syncPlaidItemTransactions } from "@/lib/plaid-sync";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { logMoneyWriteError } from "@/lib/money/log";
 
 interface ExchangeRequestBody {
   public_token: string;
@@ -251,7 +252,7 @@ export async function POST(request: Request) {
       .upsert(accountRows, { onConflict: "plaid_account_id" });
 
     if (accountsError) {
-      console.error("[plaid/exchange] accounts upsert failed:", accountsError);
+      logMoneyWriteError({ op: "accounts.upsert", table: "accounts", userId: user.id, error: accountsError });
       throw accountsError;
     }
 

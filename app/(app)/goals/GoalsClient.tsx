@@ -16,6 +16,7 @@ import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { formatMoney } from "@/lib/formatters";
 import { supabase } from "@/lib/supabase";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { logMoneyWriteError } from "@/lib/money/log";
 import type { GoalPace } from "./page";
 
 interface Goal {
@@ -290,7 +291,7 @@ function GoalForm({ goal, onClose }: { goal: Goal | null; onClose: () => void })
     setSaving(false);
 
     if (saveError) {
-      console.error("[goals] save failed:", saveError);
+      logMoneyWriteError({ op: isEditing ? "goals.update" : "goals.insert", table: "goals", userId: user.id, error: saveError });
       setError("Failed to save. Please try again.");
       return;
     }
