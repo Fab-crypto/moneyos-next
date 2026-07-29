@@ -20,16 +20,19 @@ export default async function MoPage() {
     supabase
       .from("accounts")
       .select("current_balance, current_balance_minor, currency_code, type, subtype")
+      .eq("user_id", user.id)
       .eq("is_active", true),
     supabase
       .from("transactions")
       .select("amount, amount_minor, currency_code, category, date")
+      .eq("user_id", user.id)
       .eq("is_removed", false)
       .eq("type", "expense")
       .gte("date", daysAgo(13)),
     supabase
       .from("recurring_transactions")
       .select("name, amount, next_due_date")
+      .eq("user_id", user.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
       .limit(3),

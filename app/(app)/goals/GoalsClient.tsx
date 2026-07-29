@@ -285,7 +285,7 @@ function GoalForm({ goal, onClose }: { goal: Goal | null; onClose: () => void })
     };
 
     const { error: saveError } = isEditing
-      ? await supabase.from("goals").update(payload).eq("id", goal.id)
+      ? await supabase.from("goals").update(payload).eq("id", goal.id).eq("user_id", user.id)
       : await supabase.from("goals").insert({ ...payload, user_id: user.id });
 
     setSaving(false);
@@ -304,7 +304,16 @@ function GoalForm({ goal, onClose }: { goal: Goal | null; onClose: () => void })
     if (!goal) return;
     setDeleting(true);
 
-    const { error: deleteError } = await supabase.from("goals").delete().eq("id", goal.id);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setError("Could not verify your account. Please try again.");
+      setDeleting(false);
+      return;
+    }
+
+    const { error: deleteError } = await supabase.from("goals").delete().eq("id", goal.id).eq("user_id", user.id);
 
     setDeleting(false);
 

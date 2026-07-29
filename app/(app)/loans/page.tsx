@@ -36,9 +36,10 @@ export default async function LoansPage() {
       .select(
         "id, name, official_name, mask, type, subtype, current_balance, current_balance_minor, currency_code, institution_id"
       )
+      .eq("user_id", user.id)
       .eq("is_active", true)
       .in("type", ["loan", "credit"]),
-    supabase.from("institutions").select("id, name"),
+    supabase.from("institutions").select("id, name").eq("user_id", user.id),
   ]);
 
   const accounts = accountsResult.data ?? [];
@@ -47,10 +48,11 @@ export default async function LoansPage() {
   const [loanDetailsResult, snapshotsResult] =
     accountIds.length > 0
       ? await Promise.all([
-          supabase.from("loan_details").select("*").in("account_id", accountIds),
+          supabase.from("loan_details").select("*").eq("user_id", user.id).in("account_id", accountIds),
           supabase
             .from("loan_balance_snapshots")
             .select("account_id, balance, balance_minor, currency_code, snapshot_date")
+            .eq("user_id", user.id)
             .in("account_id", accountIds)
             .order("snapshot_date", { ascending: true }),
         ])

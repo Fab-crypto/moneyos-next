@@ -45,6 +45,7 @@ export async function POST(request: Request) {
   const { data: history } = await supabase
     .from("subscription_price_history")
     .select("amount, effective_date")
+    .eq("user_id", user.id)
     .eq("recurring_transaction_id", body.subscriptionId)
     .order("effective_date", { ascending: true });
 
