@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { plaidClient } from "@/lib/plaid";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { logMoneyWriteError } from "@/lib/money/log";
 
 // Plaid liabilities don't reliably carry a per-liability currency; the owning
 // account's currency applies. MoneyOS is single-currency (USD) for v1, so we
@@ -143,7 +144,7 @@ export async function syncLoanDetails(
 
   const { error } = await admin.from("loan_details").upsert(rows, { onConflict: "account_id" });
   if (error) {
-    console.error(`[loans] failed to upsert loan details for user=${userId}:`, error);
+    logMoneyWriteError({ op: "loan_details.upsert", table: "loan_details", userId, error });
   }
 }
 
@@ -181,7 +182,7 @@ export async function recordLoanBalanceSnapshots(
     .upsert(rows, { onConflict: "account_id,snapshot_date" });
 
   if (error) {
-    console.error(`[loans] failed to record balance snapshots for user=${userId}:`, error);
+    logMoneyWriteError({ op: "loan_balance_snapshots.upsert", table: "loan_balance_snapshots", userId, error });
   }
 }
 

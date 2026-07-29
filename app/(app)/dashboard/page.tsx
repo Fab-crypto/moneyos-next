@@ -87,10 +87,12 @@ export default async function DashboardPage() {
     supabase
       .from("accounts")
       .select("current_balance, current_balance_minor, currency_code, type, subtype")
+      .eq("user_id", user.id)
       .eq("is_active", true),
     supabase
       .from("recurring_transactions")
       .select("id, name, amount, next_due_date")
+      .eq("user_id", user.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
       .limit(3),

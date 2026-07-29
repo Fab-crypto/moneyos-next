@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { logMoneyWriteError } from "@/lib/money/log";
 
 export const RECURRING_WINDOW_DAYS = 90;
 
@@ -176,7 +177,7 @@ export async function refreshRecurringBills(
       .upsert(rows, { onConflict: "user_id,name,account_id" });
 
     if (upsertError) {
-      console.error(`[recurring] failed to upsert detected bills for user=${userId}:`, upsertError);
+      logMoneyWriteError({ op: "recurring_transactions.upsert", table: "recurring_transactions", userId, error: upsertError });
       return;
     }
 
@@ -222,7 +223,7 @@ export async function refreshRecurringBills(
           .insert(priceHistoryInserts);
 
         if (historyError) {
-          console.error(`[recurring] failed to record price history for user=${userId}:`, historyError);
+          logMoneyWriteError({ op: "subscription_price_history.insert", table: "subscription_price_history", userId, error: historyError });
         }
       }
     }

@@ -26,6 +26,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { EASE, SHELL_WIDTH } from "@/lib/constants";
 import { supabase } from "@/lib/supabase";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { logMoneyWriteError } from "@/lib/money/log";
 
 interface ConnectedBank {
   id: string;
@@ -183,7 +184,7 @@ function MonthlyIncomeCard({ initialValue }: { initialValue: number | null }) {
       .eq("id", user.id);
 
     if (updateError) {
-      console.error("[profile] failed to save monthly income:", updateError);
+      logMoneyWriteError({ op: "profiles.update(monthly_income)", table: "profiles", userId: user.id, error: updateError });
       setError("Failed to save. Please try again.");
       setSaving(false);
       return;

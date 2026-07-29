@@ -25,6 +25,7 @@ export default async function AnalyticsPage() {
     supabase
       .from("transactions")
       .select("amount, amount_minor, currency_code, category, merchant_name, name, date")
+      .eq("user_id", user.id)
       .eq("is_removed", false)
       .eq("type", "expense")
       .gte("date", startOfLastMonth)

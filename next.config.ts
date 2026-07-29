@@ -1,8 +1,66 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
+// Content-Security-Policy, scoped to the origins this app actually talks to.
+// Kept as a readable directive list; edit the relevant line when adding an
+// integration rather than loosening a whole source.
+//
+// script-src includes 'unsafe-inline' because Next injects inline bootstrap
+// scripts and there is no nonce middleware yet. This is the one weak spot — the
+// documented next hardening step is nonce-based CSP (middleware sets a per-
+// request nonce; drop 'unsafe-inline' then). Everything else is tightly scoped.
+// Next's dev server (HMR/Fast Refresh) needs 'unsafe-eval'; production does not.
+// Allow it in development only so local dev works while prod stays strict.
+const devEval = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
+
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${devEval} https://va.vercel-scripts.com https://cdn.plaid.com https://js.stripe.com`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  // Supabase (REST + realtime wss), Sentry ingest, Vercel vitals, Plaid, Stripe.
+  "connect-src 'self' https://abkccdbbdfjrfskrssil.supabase.co wss://abkccdbbdfjrfskrssil.supabase.co https://o4511707254161408.ingest.us.sentry.io https://*.ingest.us.sentry.io https://vitals.vercel-insights.com https://*.plaid.com https://api.stripe.com",
+  // Plaid Link opens in an iframe; Stripe.js frames.
+  "frame-src 'self' https://*.plaid.com https://js.stripe.com https://hooks.stripe.com",
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self' https://checkout.stripe.com",
+  "frame-ancestors 'none'",
+  "upgrade-insecure-requests",
+].join("; ");
+
+const securityHeaders = [
+  // Force HTTPS for two years, including subdomains, and allow preload-list
+  // inclusion. Safe once the domain is HTTPS-only (Vercel is).
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  // Never let a browser MIME-sniff a response into an executable type.
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  // Legacy clickjacking defense (frame-ancestors 'none' in the CSP is the modern
+  // equivalent). Does not affect the Capacitor iOS WebView, which loads the app
+  // as top-level content, not in a frame.
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  // Drop access to device features the app doesn't use.
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), browsing-topics=(), interest-cohort=()",
+  },
+  { key: "Content-Security-Policy", value: contentSecurityPolicy },
+];
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async headers() {
+    return [
+      {
+        // Apply to every route.
+        source: "/:path*",
+        headers: securityHeaders,
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {
@@ -40,5 +98,5 @@ export default withSentryConfig(nextConfig, {
       // Automatically tree-shake Sentry logger statements to reduce bundle size
       removeDebugLogging: true,
     },
-  }
+  },
 });

@@ -42,6 +42,7 @@ export default async function SubscriptionsPage() {
       ? await supabase
           .from("subscription_price_history")
           .select("recurring_transaction_id, amount, amount_minor, currency_code, effective_date")
+          .eq("user_id", user.id)
           .in("recurring_transaction_id", subIds)
           .order("effective_date", { ascending: true })
       : { data: [] };

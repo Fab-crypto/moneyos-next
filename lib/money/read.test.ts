@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { moneyFromRow, sumRows } from "./read";
 
 describe("moneyFromRow", () => {
@@ -33,6 +33,30 @@ describe("moneyFromRow", () => {
 
   it("uses the fallback currency when the row has none", () => {
     expect(moneyFromRow({ amount_minor: 1234 }, "amount", { fallbackCurrency: "USD" })?.currency).toBe("USD");
+  });
+
+  it("treats a minor value of 0 as a real zero, NOT as absent (falsy-0 bug guard)", () => {
+    // A naive `if (minor)` would skip 0 and fall through to legacy 5.00 → wrong.
+    const row = { amount: 5.0, amount_minor: 0, currency_code: "USD" };
+    expect(moneyFromRow(row, "amount")?.toMinor()).toBe(BigInt(0));
+  });
+});
+
+describe("moneyFromRow — resilience (a bad row must never crash a render)", () => {
+  it("does not throw on an unsupported currency_code; degrades to legacy", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // 'XYZ' isn't in the registry: the minor path can't build Money, so it must
+    // fall through to legacy (which also can't interpret XYZ → null) WITHOUT throwing.
+    expect(() => moneyFromRow({ amount_minor: 100, amount: 1.0, currency_code: "XYZ" }, "amount")).not.toThrow();
+    expect(moneyFromRow({ amount_minor: 100, amount: 1.0, currency_code: "XYZ" }, "amount")).toBeNull();
+    spy.mockRestore();
+  });
+
+  it("degrades a non-integer minor value to the legacy column instead of throwing", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const m = moneyFromRow({ amount_minor: 12.5, amount: 12.34, currency_code: "USD" }, "amount");
+    expect(m?.toMinor()).toBe(BigInt(1234)); // used the legacy value
+    spy.mockRestore();
   });
 });
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { logMoneyWriteError } from "@/lib/money/log";
 
 interface ToggleRequestBody {
   name: string;
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
     );
 
     if (error) {
-      console.error(`[recurring-toggle] failed to mark recurring for user=${user.id}:`, error);
+      logMoneyWriteError({ op: "recurring_transactions.upsert", table: "recurring_transactions", userId: user.id, error });
       return NextResponse.json({ error: "Failed to save. Please try again." }, { status: 500 });
     }
   } else {
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
       .eq("account_id", body.accountId);
 
     if (error) {
-      console.error(`[recurring-toggle] failed to unmark recurring for user=${user.id}:`, error);
+      logMoneyWriteError({ op: "recurring_transactions.update", table: "recurring_transactions", userId: user.id, error });
       return NextResponse.json({ error: "Failed to save. Please try again." }, { status: 500 });
     }
   }

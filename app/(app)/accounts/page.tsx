@@ -29,14 +29,19 @@ export default async function AccountsPage() {
   }
 
   const [institutionsResult, accountsResult, billsResult] = await Promise.all([
-    supabase.from("institutions").select("id, name, status, last_synced_at, logo_url, plaid_institution_id"),
+    supabase
+      .from("institutions")
+      .select("id, name, status, last_synced_at, logo_url, plaid_institution_id")
+      .eq("user_id", user.id),
     supabase
       .from("accounts")
       .select("id, name, current_balance, current_balance_minor, currency_code, type, subtype,institution_id")
+      .eq("user_id", user.id)
       .eq("is_active", true),
     supabase
       .from("recurring_transactions")
       .select("id, name, amount, next_due_date")
+      .eq("user_id", user.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
       .limit(2),
