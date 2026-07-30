@@ -12,6 +12,20 @@ currently being supported with security updates.
 | 4.0.x   | :white_check_mark: |
 | < 4.0   | :x:                |
 
+## Automated Code Scanning
+
+This repository uses GitHub CodeQL code scanning (default setup) on pull
+requests and on `main`.
+
+Scanning is scoped to **JavaScript/TypeScript** only. Swift is intentionally
+excluded: the iOS target is a thin Capacitor wrapper whose only Swift is
+generated boilerplate (`ios/App/App/AppDelegate.swift` and the Capacitor SPM
+scaffolding), which carries no application logic to analyze. Leaving Swift in
+the default setup caused the umbrella CodeQL check to report a
+"configuration not found" neutral status on every PR — including changes that
+touch no Swift — so it was removed. If hand-written native Swift is added
+later, re-enable Swift in Settings → Code security → Code scanning.
+
 ## Reporting a Vulnerability
 
 Use this section to tell people how to report a vulnerability.
