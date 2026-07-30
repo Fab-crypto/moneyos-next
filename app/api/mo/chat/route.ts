@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { daysAgo } from "@/lib/date";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
-import { sumRows, moneyFromRow } from "@/lib/money/read";
+import { sumRows, moneyFromRow, moneyNumber } from "@/lib/money/read";
 import { Money } from "@/lib/money/money";
 
 function buildSystemPrompt(context: string): string {
@@ -66,19 +66,19 @@ export async function POST(request: Request) {
   const [checkingResult, txResult, billsResult, confidence] = await Promise.all([
     supabase
       .from("accounts")
-      .select("current_balance, current_balance_minor, currency_code, type, subtype")
+      .select("current_balance_minor, currency_code, type, subtype")
       .eq("user_id", user.id)
       .eq("is_active", true),
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code, category, date")
+      .select("amount_minor, currency_code, category, date")
       .eq("user_id", user.id)
       .eq("is_removed", false)
       .eq("type", "expense")
       .gte("date", daysAgo(13)),
     supabase
       .from("recurring_transactions")
-      .select("name, amount, next_due_date")
+      .select("name, amount_minor, currency_code, next_due_date")
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
       .join(", ") || "no spending recorded this week";
 
   const upcomingBillsList =
-    (billsResult.data ?? []).map((b) => `${b.name}: $${b.amount} due ${b.next_due_date}`).join("; ") ||
+    (billsResult.data ?? []).map((b) => `${b.name}: $${moneyNumber(b, "amount") ?? 0} due ${b.next_due_date}`).join("; ") ||
     "none on file";
 
   const context = [

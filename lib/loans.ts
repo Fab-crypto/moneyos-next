@@ -1,7 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { plaidClient } from "@/lib/plaid";
-import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { moneyField, moneyFieldFromMoney, currencyFields } from "@/lib/money/persistence";
+import { moneyFromRow } from "@/lib/money/read";
+import { Money } from "@/lib/money/money";
 import { logMoneyWriteError } from "@/lib/money/log";
 
 // Plaid liabilities don't reliably carry a per-liability currency; the owning
@@ -163,19 +165,23 @@ export async function recordLoanBalanceSnapshots(
 
   const { data: accounts } = await admin
     .from("accounts")
-    .select("id, current_balance")
+    .select("id, current_balance_minor, currency_code")
     .in("id", accountIds);
 
   if (!accounts || accounts.length === 0) return;
 
   const today = new Date().toISOString().slice(0, 10);
-  const rows = accounts.map((a) => ({
-    user_id: userId,
-    account_id: a.id,
-    ...moneyField("balance", a.current_balance ?? 0, "USD"),
-    ...currencyFields("USD"),
-    snapshot_date: today,
-  }));
+  const rows = accounts.map((a) => {
+    // Copy the account's exact balance into the snapshot, carrying its currency.
+    const balance = moneyFromRow(a, "current_balance", { fallbackCurrency: "USD" }) ?? Money.zero("USD");
+    return {
+      user_id: userId,
+      account_id: a.id,
+      ...moneyFieldFromMoney("balance", balance),
+      ...currencyFields(balance.currency),
+      snapshot_date: today,
+    };
+  });
 
   const { error } = await admin
     .from("loan_balance_snapshots")

@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
-import { sumRows, moneyFromRow } from "@/lib/money/read";
+import { sumRows, moneyFromRow, moneyNumber } from "@/lib/money/read";
 import { logMoneyWriteError } from "@/lib/money/log";
 
 export interface FinancialConfidenceResult {
@@ -68,7 +68,7 @@ export async function getFinancialConfidence(
   // Cheap cache probe: the two most recent snapshots (today's, if any, + prior).
   const { data: snapshotRows } = await supabase
     .from("financial_confidence_snapshots")
-    .select("score, safe_to_spend, safe_to_spend_minor, currency_code, snapshot_date")
+    .select("score, safe_to_spend_minor, currency_code, snapshot_date")
     .eq("user_id", userId)
     .order("snapshot_date", { ascending: false })
     .limit(2);
@@ -101,26 +101,26 @@ export async function getFinancialConfidence(
   const [accountsResult, expenseResult, recentExpenseResult, billsResult] = await Promise.all([
     supabase
       .from("accounts")
-      .select("current_balance, current_balance_minor, currency_code, type, subtype")
+      .select("current_balance_minor, currency_code, type, subtype")
       .eq("user_id", userId)
       .eq("is_active", true),
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code, date")
+      .select("amount_minor, currency_code, date")
       .eq("user_id", userId)
       .eq("is_removed", false)
       .eq("type", "expense")
       .gte("date", startOfLastMonth),
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code, date")
+      .select("amount_minor, currency_code, date")
       .eq("user_id", userId)
       .eq("is_removed", false)
       .eq("type", "expense")
       .gte("date", last30DaysStart),
     supabase
       .from("recurring_transactions")
-      .select("amount, amount_minor, currency_code, next_due_date")
+      .select("amount_minor, currency_code, next_due_date")
       .eq("user_id", userId)
       .eq("is_active", true)
       .gte("next_due_date", today)
@@ -198,13 +198,13 @@ export async function getSafeToSpendHistory(
 ): Promise<SafeToSpendHistoryPoint[]> {
   const { data } = await supabase
     .from("financial_confidence_snapshots")
-    .select("snapshot_date, safe_to_spend")
+    .select("snapshot_date, safe_to_spend_minor, currency_code")
     .eq("user_id", userId)
-    .not("safe_to_spend", "is", null)
+    .not("safe_to_spend_minor", "is", null)
     .order("snapshot_date", { ascending: false })
     .limit(days);
 
   return (data ?? [])
-    .map((row) => ({ date: row.snapshot_date as string, value: (row.safe_to_spend as number) ?? 0 }))
+    .map((row) => ({ date: row.snapshot_date as string, value: moneyNumber(row, "safe_to_spend") ?? 0 }))
     .reverse();
 }

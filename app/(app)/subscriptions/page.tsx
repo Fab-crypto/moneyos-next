@@ -27,7 +27,7 @@ export default async function SubscriptionsPage() {
   const { data: subsData } = await supabase
     .from("recurring_transactions")
     .select(
-      "id, name, amount, amount_minor, currency_code, frequency, next_due_date, category, review_status, source, account_id, created_at, is_trial, trial_end_date"
+      "id, name, amount_minor, currency_code, frequency, next_due_date, category, review_status, source, account_id, created_at, is_trial, trial_end_date"
     )
     .eq("user_id", user.id)
     .eq("is_active", true)
@@ -41,7 +41,7 @@ export default async function SubscriptionsPage() {
     subIds.length > 0
       ? await supabase
           .from("subscription_price_history")
-          .select("recurring_transaction_id, amount, amount_minor, currency_code, effective_date")
+          .select("recurring_transaction_id, amount_minor, currency_code, effective_date")
           .eq("user_id", user.id)
           .in("recurring_transaction_id", subIds)
           .order("effective_date", { ascending: true })

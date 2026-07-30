@@ -243,7 +243,6 @@ export async function POST(request: Request) {
         ...moneyField("current_balance", account.balances.current ?? 0, currency),
         ...moneyField("available_balance", account.balances.available, currency),
         ...currencyFields(currency),
-        currency,
       };
     });
 

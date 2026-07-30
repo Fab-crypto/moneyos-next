@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatWeekdayDate, getDaysUntilDue, formatDueLabel, daysAgo } from "@/lib/date";
 import { formatMoney } from "@/lib/formatters";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
-import { sumRows } from "@/lib/money/read";
+import { sumRows, moneyNumber } from "@/lib/money/read";
 import { getOrCreateWeeklyReview, getOrCreateMonthlyStory } from "@/lib/reviews";
 import { DashboardClient } from "./DashboardClient";
 
@@ -81,37 +81,37 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name, last_greeting_shown_date, monthly_income, onboarding_completed_at")
+      .select("full_name, last_greeting_shown_date, monthly_income_minor, currency_code, onboarding_completed_at")
       .eq("id", user.id)
       .single(),
     supabase
       .from("accounts")
-      .select("current_balance, current_balance_minor, currency_code, type, subtype")
+      .select("current_balance_minor, currency_code, type, subtype")
       .eq("user_id", user.id)
       .eq("is_active", true),
     supabase
       .from("recurring_transactions")
-      .select("id, name, amount, next_due_date")
+      .select("id, name, amount_minor, currency_code, next_due_date")
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
       .limit(3),
     supabase
       .from("goals")
-      .select("name, current_amount, target_amount, is_primary")
+      .select("name, current_amount_minor, target_amount_minor, currency_code, is_primary")
       .eq("user_id", user.id)
       .order("is_primary", { ascending: false })
       .limit(1)
       .maybeSingle(),
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code, type")
+      .select("amount_minor, currency_code, type")
       .eq("user_id", user.id)
       .eq("is_removed", false)
       .gte("date", firstOfMonthIso),
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code")
+      .select("amount_minor, currency_code")
       .eq("user_id", user.id)
       .eq("is_removed", false)
       .eq("type", "expense")
@@ -119,7 +119,7 @@ export default async function DashboardPage() {
       .lt("date", firstOfMonthIso),
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code, date")
+      .select("amount_minor, currency_code, date")
       .eq("user_id", user.id)
       .eq("is_removed", false)
       .eq("type", "expense")
@@ -151,18 +151,19 @@ export default async function DashboardPage() {
     id: b.id,
     name: b.name,
     due: formatDueLabel(b.next_due_date),
-    amount: b.amount,
+    amount: moneyNumber(b, "amount") ?? 0,
   }));
 
   const soonestBill = billsResult.data?.[0] ?? null;
+  const soonestBillAmount = moneyNumber(soonestBill, "amount") ?? 0;
   const soonestDays = soonestBill ? getDaysUntilDue(soonestBill.next_due_date) : null;
   const dueSoonBill =
     soonestBill && soonestDays !== null && soonestDays >= 0 && soonestDays <= 1
       ? {
           name: soonestBill.name,
-          amount: soonestBill.amount,
+          amount: soonestBillAmount,
           isToday: soonestDays === 0,
-          canCover: safeToSpend >= soonestBill.amount,
+          canCover: safeToSpend >= soonestBillAmount,
         }
       : null;
 
@@ -170,9 +171,11 @@ export default async function DashboardPage() {
   const weeklyReview = monthlyStory ? null : await getOrCreateWeeklyReview(supabase, user.id);
 
   const goal = goalResult.data;
+  const goalCurrent = moneyNumber(goal, "current_amount") ?? 0;
+  const goalTarget = moneyNumber(goal, "target_amount") ?? 0;
   const goalFocus =
-    goal && goal.current_amount < goal.target_amount
-      ? { name: goal.name, remaining: goal.target_amount - goal.current_amount }
+    goal && goalCurrent < goalTarget
+      ? { name: goal.name, remaining: goalTarget - goalCurrent }
       : null;
 
   // Feeds the "Emergency Fund" card - previously hardcoded to a fixed 71% /
@@ -182,12 +185,9 @@ export default async function DashboardPage() {
   const primaryGoal = goal
     ? {
         name: goal.name,
-        currentAmount: goal.current_amount,
-        targetAmount: goal.target_amount,
-        percent:
-          goal.target_amount > 0
-            ? Math.min(100, Math.round((goal.current_amount / goal.target_amount) * 100))
-            : 0,
+        currentAmount: goalCurrent,
+        targetAmount: goalTarget,
+        percent: goalTarget > 0 ? Math.min(100, Math.round((goalCurrent / goalTarget) * 100)) : 0,
       }
     : null;
 
@@ -215,7 +215,7 @@ export default async function DashboardPage() {
   const monthSoFarInsight = buildMonthSoFarInsight(
     hasAccounts,
     monthSpent,
-    profileResult.data?.monthly_income ?? null,
+    moneyNumber(profileResult.data, "monthly_income"),
     lastMonthSpent
   );
 

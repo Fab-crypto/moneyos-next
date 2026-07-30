@@ -23,8 +23,6 @@ describe("logMoneyWriteError (structured failure logging)", () => {
       user_id: "user-123",
       message: "duplicate key value violates unique constraint",
     });
-    // dual_write reflects the flag state at failure time — present for triage.
-    expect(typeof payload.dual_write).toBe("boolean");
   });
 
   it("stringifies non-Error throwables and tolerates a missing userId", () => {

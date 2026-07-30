@@ -38,24 +38,23 @@ Moving money from `numeric` (deserialized to lossy JS floats in the app) to inte
 | **2. Backfill hardening** | Folded into Phase 1 (self-verifying reconciliation block). | ✅ Done |
 | **3. Dual-write** | App code writes **both** old numeric and new `*_minor` in one atomic row upsert. **On by default in code** (no env needed). | ✅ Deployed |
 | **4. Cutover** | App reads switch to `*_minor` via `lib/money/read` (with legacy fallback). | ✅ Deployed |
-| **5. Contract** | New migration: `*_minor` / `currency_code` `NOT NULL`; drop old numeric + legacy `currency` columns. **Delete dual-write code here.** Point of no return — only after bake. | ⬜ Pending bake |
+| **4b. Legacy removal** | Code writes minor-only; all reads on `*_minor`; dual-write flag deleted. Relax migration (`…222000_relax_legacy`) drops legacy `NOT NULL`. | 🏗️ Built (`refactor/remove-legacy-money-columns`), pending deploy+bake |
+| **5. Contract** | Migration: `*_minor` `NOT NULL`; drop old numeric + legacy `currency` columns. Point of no return — only after 4b bakes. | ⬜ Pending bake |
 
-## Dual-write: kill-switch, rollback, and removal
+## Legacy removal → Phase 5 sequencing
 
-Dual-write (Phase 3) is **on by default in application code** — `isMoneyDualWriteEnabled()` in `lib/money/persistence.ts` returns true with no env configuration. This removes any dependency on a Vercel flag for the normal path. It applies identically to the **web app and the iOS/App Store build**: the iOS app is a Capacitor WebView of `moneyos.dev` (see `capacitor.config.ts`), so it runs the same deployed server + client code — server-side money writes (Plaid sync, confidence, loans, recurring) dual-write regardless of client, and client-side writes (goals, profile) use the same served bundle. There is no native-side money config to set or mis-set.
+Dual-write scaffolding has been **removed** (branch `refactor/remove-legacy-money-columns`). Money writes are now **minor-only**: `moneyField` writes just `<base>_minor`, `currencyFields` always writes `currency_code`/`scale` for a supported currency, and the `MONEY_DUAL_WRITE` / `NEXT_PUBLIC_MONEY_DUAL_WRITE` flag + `isMoneyDualWriteEnabled` are gone. Every read path consumes `*_minor` (via `moneyFromRow` / `sumRows` / `moneyNumber`); no code, export, or AI-context builder references a legacy numeric or legacy `currency` column. This applies identically to the web app and the iOS/App Store build (Capacitor WebView of `moneyos.dev` — same served bundle; no native money config).
 
-**Emergency kill-switch (temporary rollback):** if a regression appears, set **both** env vars and redeploy:
+**Strict deploy order (do not deviate):**
 
-```
-MONEY_DUAL_WRITE=false
-NEXT_PUBLIC_MONEY_DUAL_WRITE=false
-```
+1. **Apply `20260729222000_money_phase5a_relax_legacy.sql`** — drops `NOT NULL` on every legacy money column + the legacy `currency` columns. Safe/non-destructive; required so minor-only inserts don't violate `NOT NULL`. Apply this **before** deploying the legacy-free code.
+2. **Deploy the legacy-removal code** (this branch).
+3. **Bake** — observe the success criteria below (esp. zero `money_write_failed`) over the agreed window. Because writes are minor-only, verification must run against **staging with the legacy columns dropped** (or nulled), since the change to the `select` lists cannot be statically proven — an old row's legacy column is simply no longer read.
+4. **Apply `20260729222649_money_phase5_contract.sql`** (contract) — re-backfills any gap rows, hard-asserts zero data loss, sets `*_minor` `NOT NULL`, then drops the legacy columns. Point of no return.
 
-Writes then populate only the legacy numeric columns. This is safe because reads (`lib/money/read.ts`) already fall back to the legacy column when `*_minor` is null. `NEXT_PUBLIC_` requires a **rebuild** (uncheck "use existing build cache") since it is inlined at build time; the server flag takes effect on any redeploy. Full rollback of the code change is a normal `git revert` of the dual-write PR.
+**Rollback:** before step 4, a normal `git revert` of the legacy-removal PR restores dual-write; the relax migration needs no reversal (it only loosens constraints). After step 4, use `supabase/rollbacks/20260729222649_...down.sql` (reconstructs legacy = `minor / 10^scale`).
 
-**⚠️ Removal milestone (Phase 5):** dual-write is temporary migration scaffolding, not a permanent feature. When Phase 5 drops the legacy numeric columns and `*_minor` becomes the sole source of truth, **delete** `isMoneyDualWriteEnabled`, the `MONEY_DUAL_WRITE` / `NEXT_PUBLIC_MONEY_DUAL_WRITE` flags, and the legacy branch of `moneyField` / `currencyFields`; call sites then write minor units unconditionally. Do not leave the flag hard-coded in the codebase past Phase 5.
-
-**Before Phase 5 can run:** re-backfill any rows written while dual-write was off (minor NULL) so no value is lost when the legacy column is dropped. Query pattern: `... WHERE <legacy> IS NOT NULL AND <minor> IS NULL`.
+**Before the contract migration can run:** re-backfill any rows written while dual-write was off (minor NULL) so no value is lost when the legacy column is dropped. Query pattern: `... WHERE <legacy> IS NOT NULL AND <minor> IS NULL`. (Prod was at 0 gap rows as of 2026-07-29.)
 
 ### Success criteria for removing dual-write (single source of truth)
 

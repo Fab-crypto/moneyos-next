@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { sumRows, moneyFromRow } from "@/lib/money/read";
+import { sumRows, moneyFromRow, moneyNumber } from "@/lib/money/read";
 import { Money } from "@/lib/money/money";
 
 function toISODate(d: Date): string {
@@ -99,19 +99,19 @@ export async function getOrCreateWeeklyReview(
   const [txResult, snapshotsResult, goalsResult] = await Promise.all([
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code, category, merchant_name, name, date, type")
+      .select("amount_minor, currency_code, category, merchant_name, name, date, type")
       .eq("user_id", userId)
       .eq("is_removed", false)
       .gte("date", priorStart)
       .lte("date", end),
     supabase
       .from("financial_confidence_snapshots")
-      .select("snapshot_date, score, safe_to_spend")
+      .select("snapshot_date, score, safe_to_spend_minor, currency_code")
       .eq("user_id", userId)
       .gte("snapshot_date", start)
       .lte("snapshot_date", end)
       .order("snapshot_date", { ascending: true }),
-    supabase.from("goals").select("name, current_amount, target_amount").eq("user_id", userId),
+    supabase.from("goals").select("name, current_amount_minor, target_amount_minor, currency_code").eq("user_id", userId),
   ]);
 
   const allTx = txResult.data ?? [];
@@ -124,7 +124,8 @@ export async function getOrCreateWeeklyReview(
   const earned = Number(sumRows(thisWeekIncome, "amount", "USD").toDecimalString());
   const moneySaved = earned - spent;
 
-  const largest = thisWeekExpenses.length > 0 ? thisWeekExpenses.reduce((max, t) => (Math.abs(t.amount) > Math.abs(max.amount) ? t : max)) : null;
+  const absAmount = (t: Record<string, unknown>) => Math.abs(moneyNumber(t, "amount") ?? 0);
+  const largest = thisWeekExpenses.length > 0 ? thisWeekExpenses.reduce((max, t) => (absAmount(t) > absAmount(max) ? t : max)) : null;
   const largestExpense = largest
     ? { merchant: largest.merchant_name || largest.name, amount: Number(moneyFromRow(largest, "amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0) }
     : null;
@@ -141,21 +142,26 @@ export async function getOrCreateWeeklyReview(
     : null;
 
   const snapshots = snapshotsResult.data ?? [];
+  const firstSafe = moneyNumber(snapshots[0] ?? null, "safe_to_spend") ?? 0;
   const safeToSpendTrend = {
-    start: snapshots[0]?.safe_to_spend ?? 0,
-    end: snapshots[snapshots.length - 1]?.safe_to_spend ?? snapshots[0]?.safe_to_spend ?? 0,
+    start: firstSafe,
+    end: moneyNumber(snapshots[snapshots.length - 1] ?? null, "safe_to_spend") ?? firstSafe,
   };
   const confidenceTrend = {
     start: snapshots[0]?.score ?? 0,
     end: snapshots[snapshots.length - 1]?.score ?? snapshots[0]?.score ?? 0,
   };
 
-  const goals: GoalProgress[] = (goalsResult.data ?? []).map((g) => ({
-    name: g.name,
-    currentAmount: g.current_amount,
-    targetAmount: g.target_amount,
-    progressPct: g.target_amount > 0 ? Math.min(100, Math.round((g.current_amount / g.target_amount) * 100)) : 0,
-  }));
+  const goals: GoalProgress[] = (goalsResult.data ?? []).map((g) => {
+    const currentAmount = moneyNumber(g, "current_amount") ?? 0;
+    const targetAmount = moneyNumber(g, "target_amount") ?? 0;
+    return {
+      name: g.name,
+      currentAmount,
+      targetAmount,
+      progressPct: targetAmount > 0 ? Math.min(100, Math.round((currentAmount / targetAmount) * 100)) : 0,
+    };
+  });
 
   let oneThingToTry: string;
   if (moneySaved < 0 && bestCategory) {
@@ -219,18 +225,18 @@ export async function getOrCreateMonthlyStory(
   const [txResult, profileResult, snapshotsResult, goalsResult] = await Promise.all([
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code, category, merchant_name, name, date, type")
+      .select("amount_minor, currency_code, category, merchant_name, name, date, type")
       .eq("user_id", userId)
       .eq("is_removed", false)
       .gte("date", start)
       .lte("date", end),
-    supabase.from("profiles").select("monthly_income, monthly_income_minor, currency_code").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("monthly_income_minor, currency_code").eq("id", userId).maybeSingle(),
     supabase
       .from("financial_confidence_snapshots")
       .select("snapshot_date, score")
       .eq("user_id", userId)
       .order("snapshot_date", { ascending: true }),
-    supabase.from("goals").select("name, current_amount, target_amount, is_primary").eq("user_id", userId),
+    supabase.from("goals").select("name, current_amount_minor, target_amount_minor, currency_code, is_primary").eq("user_id", userId),
   ]);
 
   const allTx = txResult.data ?? [];
@@ -243,8 +249,8 @@ export async function getOrCreateMonthlyStory(
   const earned = Number(sumRows(income, "amount", "USD").toDecimalString());
   const moneySaved = earned - spent;
 
-  const hasRealBudget = profileResult.data?.monthly_income != null;
   const budget = profileResult.data ? moneyFromRow(profileResult.data, "monthly_income", { fallbackCurrency: "USD" }) : null;
+  const hasRealBudget = budget != null;
   const budgetAmount = budget ? Number(budget.toDecimalString()) : null;
 
   const byCategory = new Map<string, Money>();
@@ -261,7 +267,8 @@ export async function getOrCreateMonthlyStory(
   const biggestPurchase =
     expenses.length > 0
       ? (() => {
-          const biggest = expenses.reduce((max, t) => (Math.abs(t.amount) > Math.abs(max.amount) ? t : max));
+          const absAmt = (t: Record<string, unknown>) => Math.abs(moneyNumber(t, "amount") ?? 0);
+          const biggest = expenses.reduce((max, t) => (absAmt(t) > absAmt(max) ? t : max));
           return { merchant: biggest.merchant_name || biggest.name, amount: Number(moneyFromRow(biggest, "amount", { fallbackCurrency: "USD" })?.toDecimalString() ?? 0), date: biggest.date };
         })()
       : null;
@@ -275,12 +282,16 @@ export async function getOrCreateMonthlyStory(
   const goals: GoalProgress[] = (goalsResult.data ?? [])
     .slice()
     .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
-    .map((g) => ({
-      name: g.name,
-      currentAmount: g.current_amount,
-      targetAmount: g.target_amount,
-      progressPct: g.target_amount > 0 ? Math.min(100, Math.round((g.current_amount / g.target_amount) * 100)) : 0,
-    }));
+    .map((g) => {
+      const currentAmount = moneyNumber(g, "current_amount") ?? 0;
+      const targetAmount = moneyNumber(g, "target_amount") ?? 0;
+      return {
+        name: g.name,
+        currentAmount,
+        targetAmount,
+        progressPct: targetAmount > 0 ? Math.min(100, Math.round((currentAmount / targetAmount) * 100)) : 0,
+      };
+    });
 
   const monthLabel = new Date(start + "T00:00:00").toLocaleDateString("en-US", { month: "long" });
 

@@ -21,7 +21,7 @@ export default async function TransactionsPage() {
     await Promise.all([
       supabase
         .from("transactions")
-        .select("id, name, merchant_name, amount, amount_minor, currency_code, type, category, date, account_id")
+        .select("id, name, merchant_name, amount_minor, currency_code, type, category, date, account_id")
         .eq("user_id", user.id)
         .eq("is_removed", false)
         .order("date", { ascending: false })
@@ -30,7 +30,7 @@ export default async function TransactionsPage() {
       supabase.from("institutions").select("id, name").eq("user_id", user.id),
       supabase
         .from("accounts")
-        .select("current_balance, current_balance_minor, currency_code, type, subtype")
+        .select("current_balance_minor, currency_code, type, subtype")
         .eq("user_id", user.id)
         .eq("is_active", true),
       supabase.from("recurring_transactions").select("name, account_id").eq("user_id", user.id).eq("is_active", true),

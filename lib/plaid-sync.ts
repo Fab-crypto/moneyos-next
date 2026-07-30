@@ -84,7 +84,6 @@ export async function syncPlaidItemTransactions(
           // boundary via moneyField; no float propagates past this point.
           ...moneyField("amount", Math.abs(t.amount), currency),
           ...currencyFields(currency),
-          currency,
           type: resolveType(t.amount, pfcPrimary),
           plaid_category_primary: pfcPrimary,
           plaid_category_detailed: pfcDetailed,

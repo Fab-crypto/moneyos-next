@@ -34,7 +34,7 @@ export default async function LoansPage() {
     supabase
       .from("accounts")
       .select(
-        "id, name, official_name, mask, type, subtype, current_balance, current_balance_minor, currency_code, institution_id"
+        "id, name, official_name, mask, type, subtype, current_balance_minor, currency_code, institution_id"
       )
       .eq("user_id", user.id)
       .eq("is_active", true)
@@ -51,7 +51,7 @@ export default async function LoansPage() {
           supabase.from("loan_details").select("*").eq("user_id", user.id).in("account_id", accountIds),
           supabase
             .from("loan_balance_snapshots")
-            .select("account_id, balance, balance_minor, currency_code, snapshot_date")
+            .select("account_id, balance_minor, currency_code, snapshot_date")
             .eq("user_id", user.id)
             .in("account_id", accountIds)
             .order("snapshot_date", { ascending: true }),
