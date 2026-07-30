@@ -1,0 +1,58 @@
+# CodeQL advanced setup — moneyos-next
+#
+# This repo uses ADVANCED setup (this file) instead of GitHub's default setup.
+# Reason: moneyos-next contains generated Capacitor Swift files under ios/, and
+# CodeQL default setup auto-detects languages from repo contents, so it kept
+# re-adding `swift` even after it was unchecked in Settings — which made the
+# `Code scanning results / CodeQL` umbrella check go neutral ("configuration
+# not found") on every PR. An explicit language matrix here can't be overridden
+# by auto-detection, so scanning stays scoped to JavaScript/TypeScript only.
+#
+# IMPORTANT: GitHub's CodeQL "default setup" must be DISABLED for this workflow
+# to run (they are mutually exclusive). See ops/rulesets/README.md and the
+# migration steps in the PR that introduced this file.
+
+name: "CodeQL"
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    # Weekly backstop scan of main (Mondays 05:30 UTC), mirroring the cadence
+    # default setup provided.
+    - cron: "30 5 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      # required to upload results to the code-scanning dashboard
+      security-events: write
+      # only needed for workflows in private repos
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
