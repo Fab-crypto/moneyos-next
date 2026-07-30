@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { daysAgo } from "@/lib/date";
 import { getFinancialConfidence } from "@/lib/financial-confidence";
-import { sumRows } from "@/lib/money/read";
+import { sumRows, moneyNumber } from "@/lib/money/read";
 import { MOClient } from "./MOClient";
 
 export default async function MoPage() {
@@ -19,19 +19,19 @@ export default async function MoPage() {
     supabase.from("subscriptions").select("status").eq("user_id", user.id).maybeSingle(),
     supabase
       .from("accounts")
-      .select("current_balance, current_balance_minor, currency_code, type, subtype")
+      .select("current_balance_minor, currency_code, type, subtype")
       .eq("user_id", user.id)
       .eq("is_active", true),
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code, category, date")
+      .select("amount_minor, currency_code, category, date")
       .eq("user_id", user.id)
       .eq("is_removed", false)
       .eq("type", "expense")
       .gte("date", daysAgo(13)),
     supabase
       .from("recurring_transactions")
-      .select("name, amount, next_due_date")
+      .select("name, amount_minor, currency_code, next_due_date")
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
@@ -68,7 +68,7 @@ export default async function MoPage() {
 
   const upcomingBills = (billsResult.data ?? []).map((b) => ({
     name: b.name,
-    amount: b.amount,
+    amount: moneyNumber(b, "amount") ?? 0,
     dueDate: b.next_due_date,
   }));
 

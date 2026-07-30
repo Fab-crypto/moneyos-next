@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getInstitutionInfo } from "@/lib/plaid";
-import { moneyFromRow } from "@/lib/money/read";
+import { moneyFromRow, moneyNumber } from "@/lib/money/read";
 import { Money } from "@/lib/money/money";
 import { AccountsClient } from "./AccountsClient";
 
@@ -35,12 +35,12 @@ export default async function AccountsPage() {
       .eq("user_id", user.id),
     supabase
       .from("accounts")
-      .select("id, name, current_balance, current_balance_minor, currency_code, type, subtype,institution_id")
+      .select("id, name, current_balance_minor, currency_code, type, subtype,institution_id")
       .eq("user_id", user.id)
       .eq("is_active", true),
     supabase
       .from("recurring_transactions")
-      .select("id, name, amount, next_due_date")
+      .select("id, name, amount_minor, currency_code, next_due_date")
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
@@ -136,7 +136,7 @@ export default async function AccountsPage() {
   const upcomingBills = (billsResult.data ?? []).map((b) => ({
     id: b.id,
     name: b.name,
-    amount: b.amount,
+    amount: moneyNumber(b, "amount") ?? 0,
     due: formatDueLabel(b.next_due_date),
   }));
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushNotification } from "@/lib/push";
+import { moneyNumber } from "@/lib/money/read";
 
 function getDaysUntilDue(nextDueDate: string | null): number | null {
   if (!nextDueDate) return null;
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
 
     const { data: bills } = await admin
       .from("recurring_transactions")
-      .select("name, amount, next_due_date")
+      .select("name, amount_minor, currency_code, next_due_date")
       .eq("user_id", profile.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true })
@@ -47,14 +48,14 @@ export async function GET(request: Request) {
     if (soonest && daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 1) {
       notifications.push({
         title: daysUntilDue === 0 ? `${soonest.name} is due today` : `${soonest.name} is due tomorrow`,
-        body: `$${soonest.amount.toFixed(2)}`,
+        body: `$${(moneyNumber(soonest, "amount") ?? 0).toFixed(2)}`,
         url: "/dashboard",
       });
     }
 
     const { data: endingTrials } = await admin
       .from("recurring_transactions")
-      .select("name, amount, trial_end_date")
+      .select("name, amount_minor, currency_code, trial_end_date")
       .eq("user_id", profile.id)
       .eq("is_active", true)
       .eq("is_trial", true)
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
           daysUntilTrialEnd === 0
             ? `${trial.name}'s free trial ends today`
             : `${trial.name}'s free trial ends in ${daysUntilTrialEnd} day${daysUntilTrialEnd === 1 ? "" : "s"}`,
-        body: `It'll convert to $${trial.amount.toFixed(2)} unless you cancel first.`,
+        body: `It'll convert to $${(moneyNumber(trial, "amount") ?? 0).toFixed(2)} unless you cancel first.`,
         url: "/subscriptions",
       });
     }

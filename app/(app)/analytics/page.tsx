@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { daysAgo } from "@/lib/date";
 import { getFinancialConfidence, getSafeToSpendHistory } from "@/lib/financial-confidence";
-import { sumRows, moneyFromRow } from "@/lib/money/read";
+import { sumRows, moneyFromRow, moneyNumber } from "@/lib/money/read";
 import { Money } from "@/lib/money/money";
 import { AnalyticsClient } from "./AnalyticsClient";
 
@@ -21,10 +21,10 @@ export default async function AnalyticsPage() {
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
 
   const [profileResult, txResult, confidence] = await Promise.all([
-    supabase.from("profiles").select("monthly_income").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("monthly_income_minor, currency_code").eq("id", user.id).maybeSingle(),
     supabase
       .from("transactions")
-      .select("amount, amount_minor, currency_code, category, merchant_name, name, date")
+      .select("amount_minor, currency_code, category, merchant_name, name, date")
       .eq("user_id", user.id)
       .eq("is_removed", false)
       .eq("type", "expense")
@@ -35,8 +35,9 @@ export default async function AnalyticsPage() {
 
   const safeToSpendHistory = await getSafeToSpendHistory(supabase, user.id, 7);
 
-  const hasRealBudget = profileResult.data?.monthly_income != null;
-  const monthlyBudget = profileResult.data?.monthly_income || 3200;
+  const monthlyIncome = moneyNumber(profileResult.data, "monthly_income");
+  const hasRealBudget = monthlyIncome != null;
+  const monthlyBudget = monthlyIncome || 3200;
 
   const safeToSpendToday = confidence.safeToSpend;
 
@@ -73,7 +74,8 @@ export default async function AnalyticsPage() {
   const biggestPurchase =
     sourceForBiggest.length > 0
       ? (() => {
-          const biggest = sourceForBiggest.reduce((max, t) => (Math.abs(t.amount) > Math.abs(max.amount) ? t : max));
+          const absAmount = (t: (typeof sourceForBiggest)[number]) => Math.abs(moneyNumber(t, "amount") ?? 0);
+          const biggest = sourceForBiggest.reduce((max, t) => (absAmount(t) > absAmount(max) ? t : max));
           return {
             merchant: biggest.merchant_name || biggest.name,
             category: (biggest.category ?? "other").toLowerCase(),

@@ -3,6 +3,7 @@ import { anthropic } from "@/lib/anthropic";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { formatMoney } from "@/lib/formatters";
+import { moneyNumber } from "@/lib/money/read";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
 
   const { data: sub, error: subError } = await supabase
     .from("recurring_transactions")
-    .select("name, amount, frequency")
+    .select("name, amount_minor, currency_code, frequency")
     .eq("id", body.subscriptionId)
     .eq("user_id", user.id)
     .single();
@@ -56,7 +57,7 @@ Rules:
       messages: [
         {
           role: "user",
-          content: `Write a short cancellation message for this subscription: ${sub.name}, $${formatMoney(sub.amount)} (${sub.frequency}).`,
+          content: `Write a short cancellation message for this subscription: ${sub.name}, $${formatMoney(moneyNumber(sub, "amount") ?? 0)} (${sub.frequency}).`,
         },
       ],
     });

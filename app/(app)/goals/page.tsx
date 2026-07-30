@@ -56,7 +56,7 @@ export default async function GoalsPage() {
   const { data: goalsData } = await supabase
     .from("goals")
     .select(
-      "id, name, current_amount, current_amount_minor, target_amount, target_amount_minor, currency_code, due_date, is_primary, created_at"
+      "id, name, current_amount_minor, target_amount_minor, currency_code, due_date, is_primary, created_at"
     )
     .eq("user_id", user.id)
     .order("is_primary", { ascending: false })

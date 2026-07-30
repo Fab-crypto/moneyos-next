@@ -1,5 +1,3 @@
-import { isMoneyDualWriteEnabled } from "./persistence";
-
 /**
  * Structured error log for a failed money write. Money writes are
  * financial-critical, so a failure must never be swallowed silently — every
@@ -7,10 +5,10 @@ import { isMoneyDualWriteEnabled } from "./persistence";
  * object so failures are queryable in log aggregation (Vercel logs / Sentry):
  * filter on `event:"money_write_failed"` to surface every one.
  *
- * Because legacy and minor columns are written together in one atomic row
- * upsert, "either write failing" is a single event — the row write — captured
- * here with enough context (table, operation, user, whether dual-write was on)
- * to diagnose without reproducing.
+ * A money value now lives in a single integer `*_minor` column (plus the row's
+ * currency_code/scale), all written together in one atomic row upsert, so a
+ * failed write is a single event — captured here with enough context (table,
+ * operation, user) to diagnose without reproducing.
  */
 export function logMoneyWriteError(context: {
   op: string;
@@ -26,7 +24,6 @@ export function logMoneyWriteError(context: {
       op,
       table,
       user_id: userId ?? null,
-      dual_write: isMoneyDualWriteEnabled(),
       message: error instanceof Error ? error.message : String(error),
     })
   );

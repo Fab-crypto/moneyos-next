@@ -3,6 +3,7 @@ import { anthropic } from "@/lib/anthropic";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { formatMoney } from "@/lib/formatters";
+import { moneyNumber } from "@/lib/money/read";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
 
   const { data: sub, error: subError } = await supabase
     .from("recurring_transactions")
-    .select("name, amount, frequency, next_due_date, created_at")
+    .select("name, amount_minor, currency_code, frequency, next_due_date, created_at")
     .eq("id", body.subscriptionId)
     .eq("user_id", user.id)
     .single();
@@ -44,19 +45,19 @@ export async function POST(request: Request) {
 
   const { data: history } = await supabase
     .from("subscription_price_history")
-    .select("amount, effective_date")
+    .select("amount_minor, currency_code, effective_date")
     .eq("user_id", user.id)
     .eq("recurring_transaction_id", body.subscriptionId)
     .order("effective_date", { ascending: true });
 
   const historyText =
     (history ?? []).length > 0
-      ? (history ?? []).map((h) => `$${h.amount} on ${h.effective_date}`).join("; ")
+      ? (history ?? []).map((h) => `$${moneyNumber(h, "amount") ?? 0} on ${h.effective_date}`).join("; ")
       : "no recorded price changes yet";
 
   const context = [
     `Subscription: ${sub.name}`,
-    `Current amount: $${formatMoney(sub.amount)} (${sub.frequency})`,
+    `Current amount: $${formatMoney(moneyNumber(sub, "amount") ?? 0)} (${sub.frequency})`,
     `First tracked: ${sub.created_at.slice(0, 10)}`,
     `Real price history: ${historyText}`,
   ].join("\n");

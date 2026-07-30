@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { moneyField, currencyFields } from "@/lib/money/persistence";
+import { moneyNumber } from "@/lib/money/read";
 import { logMoneyWriteError } from "@/lib/money/log";
 
 export const RECURRING_WINDOW_DAYS = 90;
@@ -115,7 +116,7 @@ export async function refreshRecurringBills(
 
   const { data: transactions, error: txError } = await admin
     .from("transactions")
-    .select("merchant_name, name, amount, date, account_id, type, category")
+    .select("merchant_name, name, amount_minor, currency_code, date, account_id, type, category")
     .eq("user_id", userId)
     .eq("is_removed", false)
     .gte("date", windowStart);
@@ -125,7 +126,20 @@ export async function refreshRecurringBills(
     return;
   }
 
-  const detected = detectRecurringBills(transactions ?? []);
+  // Detection works on plain-number amounts; convert each row's exact minor
+  // units to a dollar number at this boundary (the averages it computes are
+  // heuristic and re-rounded to exact cents by moneyField on write).
+  const txInputs: TxInput[] = (transactions ?? []).map((t) => ({
+    merchant_name: t.merchant_name,
+    name: t.name,
+    amount: moneyNumber(t, "amount") ?? 0,
+    date: t.date,
+    account_id: t.account_id,
+    type: t.type,
+    category: t.category,
+  }));
+
+  const detected = detectRecurringBills(txInputs);
 
   const { data: manualOverrides, error: manualError } = await admin
     .from("recurring_transactions")
@@ -143,12 +157,12 @@ export async function refreshRecurringBills(
 
   const { data: existingDetected } = await admin
     .from("recurring_transactions")
-    .select("id, name, account_id, amount")
+    .select("id, name, account_id, amount_minor, currency_code")
     .eq("user_id", userId)
     .eq("source", "detected");
 
   const existingByKey = new Map(
-    (existingDetected ?? []).map((r) => [`${r.name}|${r.account_id}`, { id: r.id, amount: r.amount }])
+    (existingDetected ?? []).map((r) => [`${r.name}|${r.account_id}`, { id: r.id, amount: moneyNumber(r, "amount") ?? 0 }])
   );
 
   if (autoDetected.length > 0) {

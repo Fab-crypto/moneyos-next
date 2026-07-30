@@ -47,6 +47,24 @@ export function moneyFromRow(
 }
 
 /**
+ * Read a money field to an exact dollar *number*, preserving null (a genuinely
+ * absent value). This is the display/prop boundary helper: use it when a plain
+ * JS number is needed for the client or for ratio math, not for further money
+ * arithmetic (use moneyFromRow/sumRows for that, which stay in exact minor
+ * units). Returns null when the value is absent, so callers keep their
+ * "not set" semantics; add `?? 0` where zero is the right default.
+ */
+export function moneyNumber(
+  row: Record<string, unknown> | null | undefined,
+  base: string,
+  opts?: { minorKey?: string; currencyKey?: string; fallbackCurrency?: string }
+): number | null {
+  if (!row) return null;
+  const money = moneyFromRow(row, base, { fallbackCurrency: "USD", ...opts });
+  return money ? Number(money.toDecimalString()) : null;
+}
+
+/**
  * Sum a set of rows' money values exactly. Rows with a null value are skipped.
  * Returns a zero Money in the given currency when nothing summed, so callers
  * always get a usable value. All addition is in integer minor units — this is

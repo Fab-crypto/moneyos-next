@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { moneyNumber } from "@/lib/money/read";
 import { ProfileClient } from "./ProfileClient";
 
 export default async function ProfilePage() {
@@ -15,7 +16,7 @@ export default async function ProfilePage() {
   const [profileResult, institutionsResult, subscriptionResult] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name, created_at, notifications_enabled, monthly_income")
+      .select("full_name, created_at, notifications_enabled, monthly_income_minor, currency_code")
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("institutions").select("id, name").eq("user_id", user.id).order("name"),
@@ -48,7 +49,7 @@ export default async function ProfilePage() {
       memberSince={memberSince}
       connectedBanks={connectedBanks}
       initialNotificationsEnabled={profileResult.data?.notifications_enabled ?? true}
-      initialMonthlyIncome={profileResult.data?.monthly_income ?? null}
+      initialMonthlyIncome={moneyNumber(profileResult.data, "monthly_income")}
       isSubscribed={isSubscribed}
     />
   );
